@@ -1,0 +1,6 @@
+{
+  "name": "Smart Hackathon Team Finder - WCE Sangli",
+  "description": "Skill-based hackathon teammate recommendation and collaboration platform for Walchand College of Engineering, Sangli.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
