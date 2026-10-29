@@ -97,22 +97,22 @@ export const CandidateMatchCard = ({
           )}
         </div>
 
-        {/* 4 Deterministic Component Sub-scores */}
+        {/* 4 Deterministic Component Sub-scores without percentage weights */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
           <div className="bg-slate-950/60 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Skill (S: 40%)</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Skill</div>
             <div className="text-sm font-bold text-white">{skillMatchScore}%</div>
           </div>
           <div className="bg-slate-950/60 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Experience (20%)</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Experience</div>
             <div className="text-sm font-bold text-white">{experienceMatchScore}%</div>
           </div>
           <div className="bg-slate-950/60 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Domain (20%)</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Domain</div>
             <div className="text-sm font-bold text-white">{domainMatchScore}%</div>
           </div>
           <div className="bg-slate-950/60 p-2 rounded border border-slate-800">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Availability (20%)</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Availability</div>
             <div className="text-sm font-bold text-white">{availabilityMatchScore}%</div>
           </div>
         </div>
@@ -151,26 +151,38 @@ export const CandidateMatchCard = ({
           <strong className="text-slate-300">Why recommended:</strong> {explanation}
         </p>
 
-        {/* Action Button */}
-        <div className="pt-2 flex justify-end">
-          {hasPendingInvitation ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/60 text-amber-300 border border-amber-800 text-xs font-medium">
-              <Mail className="w-3.5 h-3.5" />
-              Invitation Pending Response
-            </span>
-          ) : isTeamFull ? (
-            <span className="text-xs text-slate-500 font-medium py-1">
-              Team is full (Max capacity reached)
-            </span>
-          ) : (
+        {/* Action Buttons */}
+        <div className="pt-2 flex items-center justify-between gap-2 flex-wrap">
+          {onViewProfile ? (
             <button
-              onClick={() => setShowInviteModal(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors cursor-pointer"
+              type="button"
+              onClick={() => onViewProfile(candidate)}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium cursor-pointer transition-colors"
             >
-              <UserPlus className="w-3.5 h-3.5" />
-              Invite to Team
+              View Profile & ID Card
             </button>
-          )}
+          ) : <div />}
+
+          <div>
+            {hasPendingInvitation ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/60 text-amber-300 border border-amber-800 text-xs font-medium">
+                <Mail className="w-3.5 h-3.5" />
+                Invitation Pending Response
+              </span>
+            ) : isTeamFull ? (
+              <span className="text-xs text-slate-500 font-medium py-1">
+                Team is full (Max capacity reached)
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Invite to Team
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

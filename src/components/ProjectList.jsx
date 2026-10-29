@@ -10,6 +10,7 @@ export const ProjectList = ({
   currentUserId,
   onOpenCreateProject,
   onOpenLeaderDashboard,
+  onOpenAuth,
 }) => {
   const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
@@ -219,6 +220,7 @@ export const ProjectList = ({
           project={selectedProject}
           currentUserId={currentUserId}
           onOpenLeaderDashboard={onOpenLeaderDashboard}
+          onOpenAuth={onOpenAuth}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
 import {
   UserModel,
   ProjectModel,
@@ -10,13 +11,12 @@ import {
   PeerEvalModel,
   TeamMessageModel,
 } from '../models/schemas.js';
-import mongoose from 'mongoose';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_FILE = path.join(__dirname, 'local_store.json');
 
-// In-Memory Fallback State
+// In-Memory Fallback State (initialized empty)
 let memoryUsers = [];
 let memoryProjects = [];
 let memoryInvitations = [];
@@ -24,6 +24,17 @@ let memoryTasks = [];
 let memoryLeaderEvals = [];
 let memoryPeerEvals = [];
 let memoryMessages = [];
+
+function docToObj(doc) {
+  if (!doc) return null;
+  const obj = typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
+  const strId = obj._id ? obj._id.toString() : (obj.id ? obj.id.toString() : '');
+  if (strId) {
+    obj.id = strId;
+    obj._id = strId;
+  }
+  return obj;
+}
 
 function loadLocalStore() {
   try {
@@ -37,7 +48,7 @@ function loadLocalStore() {
       if (Array.isArray(data.leaderEvals)) memoryLeaderEvals = data.leaderEvals;
       if (Array.isArray(data.peerEvals)) memoryPeerEvals = data.peerEvals;
       if (Array.isArray(data.messages)) memoryMessages = data.messages;
-      console.log(`[Store] Loaded ${memoryUsers.length} users and ${memoryProjects.length} projects from local_store.json.`);
+      console.log(`[Store] Local cache initialized with ${memoryUsers.length} users, ${memoryProjects.length} projects.`);
     }
   } catch (e) {
     console.warn('[Store] Local store load warning:', e.message);
@@ -61,263 +72,87 @@ export function saveLocalStore() {
   }
 }
 
-// Seed Users
-const SEED_USERS = [
-  {
-    id: 'usr_vishwajeet_patil',
-    fullName: 'Vishwajeet Patil',
-    email: 'vishwajeet.patil@walchandsangli.ac.in',
-    passwordHash: '$2b$10$aG3o5oTrdNKenVleiQa6pO/UnJdAmCCUHAjqlnrT9WNFZwCwLDMiK', // Vishwajeet@2006
-    department: 'Computer Science & Engineering',
-    academicYear: 'Third Year',
-    skills: [
-      { name: 'React', proficiency: 'Advanced' },
-      { name: 'Node.js', proficiency: 'Advanced' },
-      { name: 'TypeScript', proficiency: 'Advanced' },
-      { name: 'MongoDB', proficiency: 'Advanced' },
-      { name: 'Python', proficiency: 'Intermediate' },
-    ],
-    experienceLevel: 'Advanced',
-    interests: ['Campus Automation', 'Full Stack Development', 'AI & Machine Learning'],
-    preferredRoles: ['Team Leader', 'Full Stack Developer'],
-    availability: '20+ hrs/week',
-    bio: 'WCE CSE Third Year student. Passionate full stack developer and hackathon enthusiast.',
-    githubUrl: 'https://github.com/vishwajeet-patil',
-    linkedinUrl: 'https://linkedin.com/in/vishwajeet-patil',
-    relevantExperience: 'Lead developer for Smart Hackathon Team Finder.',
-    idCard: {
-      assetId: 'id_card_wce_vishwajeet',
-      resourceType: 'image',
-      format: 'png',
-      secureUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
-      uploadedAt: new Date().toISOString(),
-      isRestricted: true,
-      storageProvider: 'secure-local-vault',
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_rohit_leader',
-    fullName: 'Rohit Patil',
-    email: 'rohit.patil@walchandsangli.ac.in',
-    passwordHash: '$2b$10$dfnMKDKPT836sZs8B3lePuouzOIxIAiKZeJ7GS0DaH/IiOzm9UpsG', // Password@123
-    department: 'Computer Science & Engineering',
-    academicYear: 'Third Year',
-    skills: [
-      { name: 'React', proficiency: 'Advanced' },
-      { name: 'Node.js', proficiency: 'Advanced' },
-      { name: 'MongoDB', proficiency: 'Intermediate' },
-      { name: 'TypeScript', proficiency: 'Intermediate' },
-    ],
-    experienceLevel: 'Advanced',
-    interests: ['Campus Automation', 'Web Development', 'FinTech'],
-    preferredRoles: ['Team Leader', 'Full Stack Developer'],
-    availability: '20+ hrs/week',
-    bio: 'WCE CSE Third Year student. Passionate about building impactful hackathon solutions and leading engineering teams.',
-    githubUrl: 'https://github.com/rohit-patil-wce',
-    linkedinUrl: 'https://linkedin.com/in/rohit-patil-wce',
-    relevantExperience: 'Winner Smart India Hackathon internal round 2025.',
-    idCard: {
-      assetId: 'id_card_wce_rohit',
-      resourceType: 'image',
-      format: 'png',
-      secureUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
-      uploadedAt: new Date().toISOString(),
-      isRestricted: true,
-      storageProvider: 'secure-local-vault',
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_aniket_candidate',
-    fullName: 'Aniket Shinde',
-    email: 'aniket.shinde@walchandsangli.ac.in',
-    passwordHash: '$2b$10$dfnMKDKPT836sZs8B3lePuouzOIxIAiKZeJ7GS0DaH/IiOzm9UpsG', // Password@123
-    department: 'Information Technology',
-    academicYear: 'Third Year',
-    skills: [
-      { name: 'Python', proficiency: 'Expert' },
-      { name: 'Machine Learning', proficiency: 'Advanced' },
-      { name: 'FastAPI', proficiency: 'Intermediate' },
-      { name: 'Docker', proficiency: 'Intermediate' },
-    ],
-    experienceLevel: 'Advanced',
-    interests: ['Artificial Intelligence', 'Data Science', 'Smart Agriculture'],
-    preferredRoles: ['AI/ML Engineer', 'Backend Developer'],
-    availability: '15-20 hrs/week',
-    bio: 'WCE IT student focused on Machine Learning pipelines and high-throughput backend services.',
-    githubUrl: 'https://github.com/aniket-shinde-wce',
-    linkedinUrl: 'https://linkedin.com/in/aniket-shinde-wce',
-    relevantExperience: 'Built ML prediction system for agricultural yield.',
-    idCard: {
-      assetId: 'id_card_wce_aniket',
-      resourceType: 'image',
-      format: 'png',
-      secureUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-      uploadedAt: new Date().toISOString(),
-      isRestricted: true,
-      storageProvider: 'secure-local-vault',
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_neha_ui',
-    fullName: 'Neha Kulkarni',
-    email: 'neha.kulkarni@walchandsangli.ac.in',
-    passwordHash: '$2b$10$dfnMKDKPT836sZs8B3lePuouzOIxIAiKZeJ7GS0DaH/IiOzm9UpsG', // Password@123
-    department: 'Electronics Engineering',
-    academicYear: 'Fourth Year',
-    skills: [
-      { name: 'Figma', proficiency: 'Expert' },
-      { name: 'UI/UX Design', proficiency: 'Expert' },
-      { name: 'Tailwind CSS', proficiency: 'Advanced' },
-      { name: 'React', proficiency: 'Intermediate' },
-    ],
-    experienceLevel: 'Advanced',
-    interests: ['Design Systems', 'EdTech', 'HealthTech'],
-    preferredRoles: ['UI/UX Designer', 'Frontend Developer'],
-    availability: '15-20 hrs/week',
-    bio: 'Final year Electronics student passionate about accessible design systems and delightful web interfaces.',
-    idCard: {
-      assetId: 'id_card_wce_neha',
-      resourceType: 'image',
-      format: 'png',
-      secureUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
-      uploadedAt: new Date().toISOString(),
-      isRestricted: true,
-      storageProvider: 'secure-local-vault',
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
 let storeInitialized = false;
 
 export async function initStore() {
   if (storeInitialized) return;
   storeInitialized = true;
 
-  // 1. First, load existing local file state if present
+  // 1. Load local cache if present
   loadLocalStore();
 
-  // 2. Ensure all SEED_USERS are in memoryUsers and passwords are synchronized
-  for (const seed of SEED_USERS) {
-    const existingIdx = memoryUsers.findIndex(u => u.email.toLowerCase() === seed.email.toLowerCase());
-    if (existingIdx === -1) {
-      memoryUsers.push({ ...seed });
-    } else {
-      // Synchronize passwordHash and vital fields
-      memoryUsers[existingIdx].passwordHash = seed.passwordHash;
-      if (!memoryUsers[existingIdx].fullName) memoryUsers[existingIdx].fullName = seed.fullName;
-      if (!memoryUsers[existingIdx].department) memoryUsers[existingIdx].department = seed.department;
-      if (!memoryUsers[existingIdx].academicYear) memoryUsers[existingIdx].academicYear = seed.academicYear;
-      if (!memoryUsers[existingIdx].skills || memoryUsers[existingIdx].skills.length === 0) memoryUsers[existingIdx].skills = seed.skills;
-    }
-  }
-
-  // Save updated local store immediately
-  saveLocalStore();
-
-  // If MongoDB Atlas is connected, ensure seeds exist in MongoDB Atlas
+  // 2. Synchronize memory cache from MongoDB Atlas if connected
   if (mongoose.connection.readyState === 1) {
     try {
-      for (const seed of SEED_USERS) {
-        const existing = await UserModel.findOne({ email: seed.email.toLowerCase() }).lean();
-        if (!existing) {
-          const created = await UserModel.create({
-            fullName: seed.fullName,
-            email: seed.email.toLowerCase().trim(),
-            passwordHash: seed.passwordHash,
-            department: seed.department,
-            academicYear: seed.academicYear,
-            skills: seed.skills,
-            experienceLevel: seed.experienceLevel,
-            interests: seed.interests,
-            preferredRoles: seed.preferredRoles,
-            availability: seed.availability,
-            bio: seed.bio,
-            githubUrl: seed.githubUrl,
-            linkedinUrl: seed.linkedinUrl,
-            relevantExperience: seed.relevantExperience,
-            idCard: seed.idCard,
-          });
-          console.log(`[Store] Seeded ${seed.fullName} (${seed.email}) into MongoDB Atlas.`);
-          const memIdx = memoryUsers.findIndex(u => u.email.toLowerCase() === seed.email.toLowerCase());
-          if (memIdx !== -1) {
-            memoryUsers[memIdx].id = created._id.toString();
-          }
-        } else {
-          const memIdx = memoryUsers.findIndex(u => u.email.toLowerCase() === seed.email.toLowerCase());
-          if (memIdx !== -1) {
-            memoryUsers[memIdx].id = existing._id.toString();
-          }
-        }
+      const mongoUsers = await UserModel.find({}).lean();
+      if (mongoUsers && mongoUsers.length > 0) {
+        memoryUsers = mongoUsers.map(docToObj);
       }
 
-      // Also pull all existing users from MongoDB into memory
-      const allMongoUsers = await UserModel.find({}).lean();
-      for (const mUser of allMongoUsers) {
-        const mapped = { ...mUser, id: mUser._id.toString() };
-        const idx = memoryUsers.findIndex(u => u.email.toLowerCase() === mapped.email.toLowerCase());
-        if (idx === -1) {
-          memoryUsers.push(mapped);
-        } else {
-          memoryUsers[idx] = { ...memoryUsers[idx], ...mapped };
-        }
+      const mongoProjects = await ProjectModel.find({}).lean();
+      if (mongoProjects && mongoProjects.length > 0) {
+        memoryProjects = mongoProjects.map(docToObj);
       }
+
+      const mongoInvitations = await InvitationModel.find({}).lean();
+      if (mongoInvitations && mongoInvitations.length > 0) {
+        memoryInvitations = mongoInvitations.map(docToObj);
+      }
+
+      const mongoTasks = await TaskModel.find({}).lean();
+      if (mongoTasks && mongoTasks.length > 0) {
+        memoryTasks = mongoTasks.map(docToObj);
+      }
+
+      const mongoLeaderEvals = await LeaderEvalModel.find({}).lean();
+      if (mongoLeaderEvals && mongoLeaderEvals.length > 0) {
+        memoryLeaderEvals = mongoLeaderEvals.map(docToObj);
+      }
+
+      const mongoPeerEvals = await PeerEvalModel.find({}).lean();
+      if (mongoPeerEvals && mongoPeerEvals.length > 0) {
+        memoryPeerEvals = mongoPeerEvals.map(docToObj);
+      }
+
+      saveLocalStore();
+      console.log(`[Store] Synchronized with MongoDB Atlas: ${mongoUsers.length} users, ${mongoProjects.length} projects.`);
     } catch (err) {
-      console.warn('[Store] MongoDB Atlas seed sync warning:', err.message);
+      console.warn('[Store] MongoDB Atlas synchronization warning:', err.message);
     }
-  }
-
-  // Initialize default project if empty
-  if (memoryProjects.length === 0) {
-    const leader = memoryUsers.find(u => u.email === 'rohit.patil@walchandsangli.ac.in') || memoryUsers[0];
-    memoryProjects.push({
-      id: 'proj_smart_campus_wce',
-      name: 'Smart WCE Campus & Hostel IoT Navigator',
-      idea: 'An intelligent campus IoT navigation and real-time lab equipment availability tracking system for Walchand College of Engineering, Sangli.',
-      description: 'Comprehensive web platform integrating IoT sensor nodes across department labs with interactive routing.',
-      problemStatement: 'Students often struggle to locate open hardware labs, free computing stations, and campus facilities across WCE.',
-      domain: 'Smart Campus & IoT',
-      technicalApproach: 'React frontend with interactive SVG campus blueprint; Node.js backend with Dijkstra routing algorithms and MQTT IoT telemetry.',
-      requiredSkills: [
-        { skill: 'React', minProficiency: 'Intermediate', isMandatory: true },
-        { skill: 'Node.js', minProficiency: 'Intermediate', isMandatory: true },
-        { skill: 'Python', minProficiency: 'Intermediate', isMandatory: false },
-        { skill: 'Figma', minProficiency: 'Intermediate', isMandatory: false },
-      ],
-      requiredRoles: ['Frontend Developer', 'Backend Developer', 'AI/ML Engineer', 'UI/UX Designer'],
-      totalTeamSize: 4,
-      preferredExperienceLevel: 'Intermediate',
-      memberResponsibilities: 'Frontend maps interface, IoT sensor MQTT gateway, and cloud database synchronization.',
-      timeline: '4 Weeks',
-      expectedAvailability: '15-20 hrs/week',
-      recruitmentStatus: 'Open',
-      leaderId: leader ? leader.id : 'usr_rohit_leader',
-      leaderName: leader ? leader.fullName : 'Rohit Patil',
-      leaderEmail: leader ? leader.email : 'rohit.patil@walchandsangli.ac.in',
-      teamMembers: [
-        {
-          userId: leader ? leader.id : 'usr_rohit_leader',
-          name: leader ? leader.fullName : 'Rohit Patil',
-          email: leader ? leader.email : 'rohit.patil@walchandsangli.ac.in',
-          role: 'Team Leader',
-          joinedAt: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
   }
 }
 
 export const dbStore = {
-  // Users
+  // Clear all data from MongoDB and memory
+  async clearAllData() {
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await Promise.all([
+          UserModel.deleteMany({}),
+          ProjectModel.deleteMany({}),
+          InvitationModel.deleteMany({}),
+          TaskModel.deleteMany({}),
+          LeaderEvalModel.deleteMany({}),
+          PeerEvalModel.deleteMany({}),
+          TeamMessageModel.deleteMany({}),
+        ]);
+        console.log('[Store] MongoDB Atlas collections completely emptied.');
+      } catch (err) {
+        console.warn('[Store] Error clearing MongoDB Atlas collections:', err.message);
+      }
+    }
+    memoryUsers = [];
+    memoryProjects = [];
+    memoryInvitations = [];
+    memoryTasks = [];
+    memoryLeaderEvals = [];
+    memoryPeerEvals = [];
+    memoryMessages = [];
+    saveLocalStore();
+    return true;
+  },
+
+  // USERS
   async findUserByEmail(email) {
     await initStore();
     if (!email) return null;
@@ -330,8 +165,7 @@ export const dbStore = {
           email: { $regex: new RegExp(`^${escaped}$`, 'i') },
         }).lean();
         if (doc) {
-          const user = { ...doc, id: doc._id?.toString() || doc.id };
-          // Keep memory store updated
+          const user = docToObj(doc);
           const idx = memoryUsers.findIndex(u => u.email.toLowerCase() === normalized);
           if (idx === -1) memoryUsers.push(user);
           else memoryUsers[idx] = user;
@@ -345,30 +179,53 @@ export const dbStore = {
     return memoryUsers.find(u => u.email.toLowerCase() === normalized) || null;
   },
 
-  async findUserById(id) {
+  async findUserByName(name) {
     await initStore();
-    if (!id) return null;
-
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(id)) {
+    if (!name) return null;
+    const clean = name.trim();
+    if (mongoose.connection.readyState === 1) {
       try {
-        const doc = await UserModel.findById(id).lean();
-        if (doc) return { ...doc, id: doc._id?.toString() || doc.id };
+        const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const doc = await UserModel.findOne({
+          fullName: { $regex: new RegExp(`^${escaped}$`, 'i') },
+        }).lean();
+        if (doc) return docToObj(doc);
       } catch (e) {
         // Fallback
       }
     }
-    return memoryUsers.find(u => u.id === id || u._id?.toString() === id) || null;
+    return memoryUsers.find(u => u.fullName && u.fullName.toLowerCase() === clean.toLowerCase()) || null;
+  },
+
+  async findUserById(id) {
+    await initStore();
+    if (!id) return null;
+    const idStr = String(id);
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await UserModel.findById(idStr).lean();
+        }
+        if (!doc) {
+          doc = await UserModel.findOne({ id: idStr }).lean();
+        }
+        if (doc) return docToObj(doc);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return memoryUsers.find(u => u.id === idStr || u._id?.toString() === idStr) || null;
   },
 
   async createUser(userData) {
     await initStore();
-    const id = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const normalizedEmail = (userData.email || '').toLowerCase().trim();
 
-    const user = {
+    let user = {
       ...userData,
       email: normalizedEmail,
-      id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -381,24 +238,27 @@ export const dbStore = {
           passwordHash: user.passwordHash,
           department: user.department,
           academicYear: user.academicYear,
-          skills: user.skills,
-          experienceLevel: user.experienceLevel,
-          interests: user.interests,
-          preferredRoles: user.preferredRoles,
-          availability: user.availability,
-          bio: user.bio,
+          skills: user.skills || [],
+          experienceLevel: user.experienceLevel || 'Intermediate',
+          interests: user.interests || [],
+          preferredRoles: user.preferredRoles || [],
+          availability: user.availability || '15-20 hrs/week',
+          bio: user.bio || '',
           githubUrl: user.githubUrl,
           linkedinUrl: user.linkedinUrl,
           relevantExperience: user.relevantExperience,
           idCard: user.idCard,
         });
-        user.id = created._id.toString();
+        user = docToObj(created);
+        console.log(`[Store] Created user in MongoDB Atlas: ${user.fullName} (${user.email}) ID: ${user.id}`);
       } catch (e) {
-        console.warn('[Store] MongoDB Atlas user creation failed, retained in memory:', e.message);
+        console.warn('[Store] MongoDB Atlas user creation error, falling back to memory:', e.message);
+        user.id = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
       }
+    } else {
+      user.id = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     }
 
-    // Add or update in memory cache
     const existingIdx = memoryUsers.findIndex(u => u.email.toLowerCase() === normalizedEmail);
     if (existingIdx !== -1) {
       memoryUsers[existingIdx] = user;
@@ -412,23 +272,36 @@ export const dbStore = {
 
   async updateUser(id, updates) {
     await initStore();
-    const idx = memoryUsers.findIndex(u => u.id === id || u._id?.toString() === id);
+    const idStr = String(id);
+    let updatedUser = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await UserModel.findByIdAndUpdate(idStr, updates, { returnDocument: 'after' }).lean();
+        }
+        if (!doc) {
+          doc = await UserModel.findOneAndUpdate({ id: idStr }, updates, { returnDocument: 'after' }).lean();
+        }
+        if (doc) updatedUser = docToObj(doc);
+      } catch (e) {
+        console.warn('[Store] MongoDB updateUser error:', e.message);
+      }
+    }
+
+    const idx = memoryUsers.findIndex(u => u.id === idStr || u._id?.toString() === idStr);
     if (idx !== -1) {
       memoryUsers[idx] = {
         ...memoryUsers[idx],
         ...updates,
         updatedAt: new Date().toISOString(),
       };
+      if (!updatedUser) updatedUser = memoryUsers[idx];
       saveLocalStore();
     }
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(id)) {
-      try {
-        await UserModel.findByIdAndUpdate(id, updates);
-      } catch (e) {
-        // ignore
-      }
-    }
-    return this.findUserById(id);
+
+    return updatedUser || this.findUserById(id);
   },
 
   async getAllUsers() {
@@ -437,7 +310,9 @@ export const dbStore = {
       try {
         const docs = await UserModel.find({}).lean();
         if (docs && docs.length > 0) {
-          return docs.map(d => ({ ...d, id: d._id?.toString() || d.id }));
+          const users = docs.map(docToObj);
+          memoryUsers = users;
+          return users;
         }
       } catch (e) {
         // Fallback to memory
@@ -446,185 +321,552 @@ export const dbStore = {
     return [...memoryUsers];
   },
 
-  // Projects
+  // PROJECTS
   async getAllProjects() {
     await initStore();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await ProjectModel.find({}).sort({ createdAt: -1 }).lean();
+        if (docs && docs.length > 0) {
+          const projs = docs.map(docToObj);
+          memoryProjects = projs;
+          return projs;
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
     return [...memoryProjects];
   },
 
   async findProjectById(id) {
     await initStore();
-    return memoryProjects.find(p => p.id === id) || null;
+    if (!id) return null;
+    const idStr = String(id);
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await ProjectModel.findById(idStr).lean();
+        }
+        if (!doc) {
+          doc = await ProjectModel.findOne({ id: idStr }).lean();
+        }
+        if (doc) return docToObj(doc);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return memoryProjects.find(p => p.id === idStr || p._id?.toString() === idStr) || null;
   },
 
   async createProject(projectData) {
     await initStore();
-    const id = 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    const project = {
+    const normalizedMembers = (projectData.teamMembers || []).map(m => ({
+      ...m,
+      fullName: m.fullName || m.name || 'Team Member',
+      name: m.name || m.fullName || 'Team Member',
+      joinedAt: m.joinedAt || new Date().toISOString(),
+    }));
+
+    let project = {
       ...projectData,
-      id,
-      teamMembers: projectData.teamMembers || [],
+      teamMembers: normalizedMembers,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const created = await ProjectModel.create({
+          name: project.name,
+          idea: project.idea,
+          description: project.description,
+          problemStatement: project.problemStatement,
+          domain: project.domain,
+          technicalApproach: project.technicalApproach,
+          requiredSkills: project.requiredSkills || [],
+          requiredRoles: project.requiredRoles || [],
+          totalTeamSize: project.totalTeamSize || 4,
+          preferredExperienceLevel: project.preferredExperienceLevel || 'Intermediate',
+          memberResponsibilities: project.memberResponsibilities || '',
+          timeline: project.timeline || '4 Weeks',
+          expectedAvailability: project.expectedAvailability || '15-20 hrs/week',
+          recruitmentStatus: project.recruitmentStatus || 'Open',
+          leaderId: project.leaderId,
+          leaderName: project.leaderName,
+          leaderEmail: project.leaderEmail,
+          teamMembers: normalizedMembers,
+        });
+        project = docToObj(created);
+        console.log(`[Store] Created project in MongoDB Atlas: ${project.name} (ID: ${project.id})`);
+      } catch (e) {
+        console.warn('[Store] MongoDB Atlas project creation error, falling back to memory:', e.message);
+        project.id = 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+    } else {
+      project.id = 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
     memoryProjects.unshift(project);
+    saveLocalStore();
     return project;
   },
 
   async updateProject(id, updates) {
     await initStore();
-    const idx = memoryProjects.findIndex(p => p.id === id);
-    if (idx === -1) return null;
-    memoryProjects[idx] = {
-      ...memoryProjects[idx],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    return memoryProjects[idx];
+    const idStr = String(id);
+
+    if (updates.teamMembers) {
+      updates.teamMembers = updates.teamMembers.map(m => ({
+        ...m,
+        fullName: m.fullName || m.name || 'Team Member',
+        name: m.name || m.fullName || 'Team Member',
+      }));
+    }
+
+    let updatedProject = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await ProjectModel.findByIdAndUpdate(idStr, updates, { returnDocument: 'after' }).lean();
+        }
+        if (!doc) {
+          doc = await ProjectModel.findOneAndUpdate({ id: idStr }, updates, { returnDocument: 'after' }).lean();
+        }
+        if (doc) updatedProject = docToObj(doc);
+      } catch (e) {
+        console.warn('[Store] MongoDB updateProject error:', e.message);
+      }
+    }
+
+    const idx = memoryProjects.findIndex(p => p.id === idStr || p._id?.toString() === idStr);
+    if (idx !== -1) {
+      memoryProjects[idx] = {
+        ...memoryProjects[idx],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      if (!updatedProject) updatedProject = memoryProjects[idx];
+      saveLocalStore();
+    }
+
+    return updatedProject || this.findProjectById(id);
   },
 
   async addTeamMember(projectId, member) {
     await initStore();
     const project = await this.findProjectById(projectId);
     if (!project) return null;
-    const exists = project.teamMembers.some(m => m.userId === member.userId);
+
+    const exists = project.teamMembers.some(m => String(m.userId) === String(member.userId));
     if (!exists) {
-      project.teamMembers.push({
-        ...member,
-        joinedAt: new Date().toISOString(),
-      });
-      await this.updateProject(projectId, { teamMembers: project.teamMembers });
+      const fullName = member.fullName || member.name || 'Team Member';
+      const updatedMembers = [
+        ...project.teamMembers,
+        {
+          ...member,
+          fullName,
+          name: member.name || fullName,
+          joinedAt: new Date().toISOString(),
+        },
+      ];
+      return await this.updateProject(projectId, { teamMembers: updatedMembers });
     }
     return project;
   },
 
-  // Invitations
+  // INVITATIONS & JOIN REQUESTS
   async getInvitationsByCandidate(candidateId) {
     await initStore();
-    return memoryInvitations.filter(i => i.candidateId === candidateId);
+    const cIdStr = String(candidateId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await InvitationModel.find({
+          candidateId: cIdStr,
+          $or: [{ type: 'invitation' }, { type: { $exists: false } }],
+        }).sort({ createdAt: -1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryInvitations.filter(i => String(i.candidateId) === cIdStr && (!i.type || i.type === 'invitation'));
   },
 
   async getInvitationsByProject(projectId) {
     await initStore();
-    return memoryInvitations.filter(i => i.projectId === projectId);
+    const pIdStr = String(projectId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await InvitationModel.find({
+          projectId: pIdStr,
+          $or: [{ type: 'invitation' }, { type: { $exists: false } }],
+        }).sort({ createdAt: -1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryInvitations.filter(i => String(i.projectId) === pIdStr && (!i.type || i.type === 'invitation'));
+  },
+
+  async getJoinRequestsByProject(projectId) {
+    await initStore();
+    const pIdStr = String(projectId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const orClauses = [{ projectId: pIdStr }];
+        if (mongoose.Types.ObjectId.isValid(pIdStr)) {
+          orClauses.push({ projectId: new mongoose.Types.ObjectId(pIdStr) });
+        }
+        const docs = await InvitationModel.find({
+          $or: orClauses,
+          type: 'join_request',
+        }).sort({ createdAt: -1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryInvitations.filter(i => (String(i.projectId) === pIdStr || i.projectId?.toString() === pIdStr) && i.type === 'join_request');
+  },
+
+  async getJoinRequestsForLeader(leaderId, leaderEmail) {
+    await initStore();
+    const lIdStr = String(leaderId);
+    const lEmailNorm = (leaderEmail || '').toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await InvitationModel.find({
+          type: 'join_request',
+          $or: [
+            { leaderId: lIdStr },
+            { leaderEmail: lEmailNorm },
+          ],
+        }).sort({ createdAt: -1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryInvitations.filter(
+      i => i.type === 'join_request' &&
+      (String(i.leaderId) === lIdStr || (i.leaderEmail && i.leaderEmail.toLowerCase() === lEmailNorm))
+    );
+  },
+
+  async getJoinRequestsByCandidate(candidateId) {
+    await initStore();
+    const cIdStr = String(candidateId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await InvitationModel.find({
+          candidateId: cIdStr,
+          type: 'join_request',
+        }).sort({ createdAt: -1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryInvitations.filter(i => String(i.candidateId) === cIdStr && i.type === 'join_request');
   },
 
   async findInvitationById(id) {
     await initStore();
-    return memoryInvitations.find(i => i.id === id) || null;
+    const idStr = String(id);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await InvitationModel.findById(idStr).lean();
+        }
+        if (!doc) {
+          doc = await InvitationModel.findOne({ id: idStr }).lean();
+        }
+        if (doc) return docToObj(doc);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryInvitations.find(i => String(i.id) === idStr || i._id?.toString() === idStr) || null;
   },
 
   async createInvitation(invData) {
     await initStore();
-    const id = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    const inv = {
+    let inv = {
       ...invData,
-      id,
+      type: invData.type || 'invitation',
       status: 'Pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const created = await InvitationModel.create(inv);
+        inv = docToObj(created);
+        console.log(`[Store] Created invitation in MongoDB Atlas (ID: ${inv.id})`);
+      } catch (e) {
+        inv.id = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+    } else {
+      inv.id = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
     memoryInvitations.unshift(inv);
+    saveLocalStore();
     return inv;
+  },
+
+  async createJoinRequest(reqData) {
+    await initStore();
+    let joinReq = {
+      ...reqData,
+      type: 'join_request',
+      status: 'Pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const created = await InvitationModel.create(joinReq);
+        joinReq = docToObj(created);
+        console.log(`[Store] Created join request in MongoDB Atlas (ID: ${joinReq.id})`);
+      } catch (e) {
+        joinReq.id = 'jreq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+    } else {
+      joinReq.id = 'jreq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
+    memoryInvitations.unshift(joinReq);
+    saveLocalStore();
+    return joinReq;
   },
 
   async updateInvitation(id, updates) {
     await initStore();
-    const idx = memoryInvitations.findIndex(i => i.id === id);
-    if (idx === -1) return null;
-    memoryInvitations[idx] = {
-      ...memoryInvitations[idx],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    return memoryInvitations[idx];
+    const idStr = String(id);
+    let updatedInv = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await InvitationModel.findByIdAndUpdate(idStr, updates, { returnDocument: 'after' }).lean();
+        }
+        if (!doc) {
+          doc = await InvitationModel.findOneAndUpdate({ id: idStr }, updates, { returnDocument: 'after' }).lean();
+        }
+        if (doc) updatedInv = docToObj(doc);
+      } catch (e) {
+        // fallback
+      }
+    }
+
+    const idx = memoryInvitations.findIndex(i => String(i.id) === idStr || i._id?.toString() === idStr);
+    if (idx !== -1) {
+      memoryInvitations[idx] = {
+        ...memoryInvitations[idx],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      if (!updatedInv) updatedInv = memoryInvitations[idx];
+      saveLocalStore();
+    }
+
+    return updatedInv || this.findInvitationById(id);
   },
 
-  // Tasks
+  // TASKS
   async getTasksByProject(projectId) {
     await initStore();
-    return memoryTasks.filter(t => t.projectId === projectId);
+    const pIdStr = String(projectId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await TaskModel.find({ projectId: pIdStr }).sort({ deadline: 1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryTasks.filter(t => String(t.projectId) === pIdStr);
   },
 
   async getTasksByMember(userId) {
     await initStore();
-    return memoryTasks.filter(t => t.assignedTo === userId);
+    const uIdStr = String(userId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await TaskModel.find({ assignedTo: uIdStr }).sort({ deadline: 1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryTasks.filter(t => String(t.assignedTo) === uIdStr);
   },
 
   async findTaskById(id) {
     await initStore();
-    return memoryTasks.find(t => t.id === id) || null;
+    const idStr = String(id);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await TaskModel.findById(idStr).lean();
+        }
+        if (!doc) {
+          doc = await TaskModel.findOne({ id: idStr }).lean();
+        }
+        if (doc) return docToObj(doc);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryTasks.find(t => String(t.id) === idStr || t._id?.toString() === idStr) || null;
   },
 
   async createTask(taskData) {
     await initStore();
-    const id = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const now = new Date();
     const deadlineDate = new Date(taskData.deadline);
-    const task = {
+    let task = {
       ...taskData,
-      id,
       status: taskData.status || 'Pending',
       isOverdue: deadlineDate < now && taskData.status !== 'Completed',
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const created = await TaskModel.create(task);
+        task = docToObj(created);
+        console.log(`[Store] Created task in MongoDB Atlas: ${task.title} (ID: ${task.id})`);
+      } catch (e) {
+        task.id = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+    } else {
+      task.id = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
     memoryTasks.push(task);
+    saveLocalStore();
     return task;
   },
 
   async updateTask(id, updates) {
     await initStore();
-    const idx = memoryTasks.findIndex(t => t.id === id);
-    if (idx === -1) return null;
+    const idStr = String(id);
+    let updatedTask = null;
 
-    const current = memoryTasks[idx];
-    const updated = {
-      ...current,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (updates.status === 'Completed' && !current.completedAt) {
-      updated.completedAt = new Date().toISOString();
-      if (updated.deadline) {
-        updated.completedOnTime = new Date(updated.completedAt) <= new Date(updated.deadline);
-      } else {
-        updated.completedOnTime = true;
+    if (updates.status === 'Completed' && !updates.completedAt) {
+      updates.completedAt = new Date().toISOString();
+      if (updates.deadline) {
+        updates.completedOnTime = new Date(updates.completedAt) <= new Date(updates.deadline);
       }
     }
 
-    if (updated.deadline && updated.status !== 'Completed') {
-      updated.isOverdue = new Date(updated.deadline) < new Date();
-    } else {
-      updated.isOverdue = false;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let doc = null;
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          doc = await TaskModel.findByIdAndUpdate(idStr, updates, { returnDocument: 'after' }).lean();
+        }
+        if (!doc) {
+          doc = await TaskModel.findOneAndUpdate({ id: idStr }, updates, { returnDocument: 'after' }).lean();
+        }
+        if (doc) updatedTask = docToObj(doc);
+      } catch (e) {
+        // fallback
+      }
     }
 
-    memoryTasks[idx] = updated;
-    return updated;
+    const idx = memoryTasks.findIndex(t => String(t.id) === idStr || t._id?.toString() === idStr);
+    if (idx !== -1) {
+      memoryTasks[idx] = {
+        ...memoryTasks[idx],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
+      if (!updatedTask) updatedTask = memoryTasks[idx];
+      saveLocalStore();
+    }
+
+    return updatedTask || this.findTaskById(id);
   },
 
   async deleteTask(id) {
     await initStore();
-    const idx = memoryTasks.findIndex(t => t.id === id);
+    const idStr = String(id);
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        if (mongoose.Types.ObjectId.isValid(idStr)) {
+          await TaskModel.findByIdAndDelete(idStr);
+        } else {
+          await TaskModel.findOneAndDelete({ id: idStr });
+        }
+      } catch (e) {
+        // fallback
+      }
+    }
+
+    const idx = memoryTasks.findIndex(t => String(t.id) === idStr || t._id?.toString() === idStr);
     if (idx !== -1) {
       memoryTasks.splice(idx, 1);
+      saveLocalStore();
       return true;
     }
     return false;
   },
 
-  // Leader Evaluations
+  // LEADER EVALUATIONS
   async getLeaderEvaluations(projectId) {
     await initStore();
-    return memoryLeaderEvals.filter(e => e.projectId === projectId);
+    const pIdStr = String(projectId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await LeaderEvalModel.find({ projectId: pIdStr }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryLeaderEvals.filter(e => String(e.projectId) === pIdStr);
   },
 
   async saveLeaderEvaluation(evalData) {
     await initStore();
+    let savedEval = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const query = {
+          projectId: evalData.projectId,
+          memberId: evalData.memberId,
+          evaluationPeriod: evalData.evaluationPeriod,
+        };
+        const updated = await LeaderEvalModel.findOneAndUpdate(
+          query,
+          evalData,
+          { upsert: true, returnDocument: 'after' }
+        ).lean();
+        savedEval = docToObj(updated);
+      } catch (e) {
+        console.warn('[Store] MongoDB saveLeaderEvaluation error:', e.message);
+      }
+    }
+
     const existingIdx = memoryLeaderEvals.findIndex(
-      e => e.projectId === evalData.projectId &&
-           e.memberId === evalData.memberId &&
+      e => String(e.projectId) === String(evalData.projectId) &&
+           String(e.memberId) === String(evalData.memberId) &&
            e.evaluationPeriod === evalData.evaluationPeriod
     );
 
@@ -634,39 +876,84 @@ export const dbStore = {
         ...evalData,
         updatedAt: new Date().toISOString(),
       };
-      return memoryLeaderEvals[existingIdx];
+      if (!savedEval) savedEval = memoryLeaderEvals[existingIdx];
     } else {
-      const id = 'leval_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-      const newEval = {
+      const newEval = savedEval || {
         ...evalData,
-        id,
+        id: 'leval_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       memoryLeaderEvals.push(newEval);
-      return newEval;
+      if (!savedEval) savedEval = newEval;
     }
+
+    saveLocalStore();
+    return savedEval;
   },
 
-  // Peer Evaluations
+  // PEER EVALUATIONS
   async getPeerEvaluationsByProject(projectId) {
     await initStore();
-    return memoryPeerEvals.filter(e => e.projectId === projectId);
+    const pIdStr = String(projectId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await PeerEvalModel.find({ projectId: pIdStr }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return memoryPeerEvals.filter(e => String(e.projectId) === pIdStr);
   },
 
   async getPeerEvaluationsForMember(projectId, memberId) {
     await initStore();
+    const pIdStr = String(projectId);
+    const mIdStr = String(memberId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await PeerEvalModel.find({
+          projectId: pIdStr,
+          evaluatedMemberId: mIdStr,
+        }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
     return memoryPeerEvals.filter(
-      e => e.projectId === projectId && e.evaluatedMemberId === memberId
+      e => String(e.projectId) === pIdStr && String(e.evaluatedMemberId) === mIdStr
     );
   },
 
   async savePeerEvaluation(evalData) {
     await initStore();
+    let savedEval = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const query = {
+          projectId: evalData.projectId,
+          evaluatorId: evalData.evaluatorId,
+          evaluatedMemberId: evalData.evaluatedMemberId,
+          evaluationPeriod: evalData.evaluationPeriod,
+        };
+        const updated = await PeerEvalModel.findOneAndUpdate(
+          query,
+          evalData,
+          { upsert: true, returnDocument: 'after' }
+        ).lean();
+        savedEval = docToObj(updated);
+      } catch (e) {
+        console.warn('[Store] MongoDB savePeerEvaluation error:', e.message);
+      }
+    }
+
     const existingIdx = memoryPeerEvals.findIndex(
-      e => e.projectId === evalData.projectId &&
-           e.evaluatorId === evalData.evaluatorId &&
-           e.evaluatedMemberId === evalData.evaluatedMemberId &&
+      e => String(e.projectId) === String(evalData.projectId) &&
+           String(e.evaluatorId) === String(evalData.evaluatorId) &&
+           String(e.evaluatedMemberId) === String(evalData.evaluatedMemberId) &&
            e.evaluationPeriod === evalData.evaluationPeriod
     );
 
@@ -676,37 +963,59 @@ export const dbStore = {
         ...evalData,
         updatedAt: new Date().toISOString(),
       };
-      return memoryPeerEvals[existingIdx];
+      if (!savedEval) savedEval = memoryPeerEvals[existingIdx];
     } else {
-      const id = 'peval_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-      const newEval = {
+      const newEval = savedEval || {
         ...evalData,
-        id,
+        id: 'peval_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       memoryPeerEvals.push(newEval);
-      return newEval;
+      if (!savedEval) savedEval = newEval;
     }
+
+    saveLocalStore();
+    return savedEval;
   },
 
-  // Discussions
+  // TEAM MESSAGES
   async getMessagesByProject(projectId) {
     await initStore();
+    const pIdStr = String(projectId);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const docs = await TeamMessageModel.find({ projectId: pIdStr }).sort({ timestamp: 1 }).lean();
+        if (docs && docs.length > 0) return docs.map(docToObj);
+      } catch (e) {
+        // fallback
+      }
+    }
     return memoryMessages
-      .filter(m => m.projectId === projectId)
+      .filter(m => String(m.projectId) === pIdStr)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   },
 
   async createMessage(msgData) {
     await initStore();
-    const id = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    const msg = {
+    let msg = {
       ...msgData,
-      id,
       timestamp: new Date().toISOString(),
     };
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const created = await TeamMessageModel.create(msg);
+        msg = docToObj(created);
+      } catch (e) {
+        msg.id = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+    } else {
+      msg.id = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
     memoryMessages.push(msg);
+    saveLocalStore();
     return msg;
   },
 };

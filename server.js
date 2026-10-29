@@ -1,8 +1,8 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import { connectDB } from './server/db/connection.js';
 import { initStore } from './server/db/store.js';
 

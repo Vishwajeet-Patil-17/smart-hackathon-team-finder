@@ -136,28 +136,26 @@ export const ProfileViewModal = ({
             Profile Overview
           </button>
 
-          {isSelf && (
-            <>
-              <button
-                onClick={() => setActiveTab('edit')}
-                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
-                  activeTab === 'edit' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                Edit Profile
-              </button>
+          <button
+            onClick={() => setActiveTab('idCard')}
+            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
+              activeTab === 'idCard' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Student ID Card
+          </button>
 
-              <button
-                onClick={() => setActiveTab('idCard')}
-                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
-                  activeTab === 'idCard' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Lock className="w-3.5 h-3.5" />
-                Student ID Card & Security
-              </button>
-            </>
+          {isSelf && (
+            <button
+              onClick={() => setActiveTab('edit')}
+              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
+                activeTab === 'edit' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              Edit Profile
+            </button>
           )}
         </div>
 
@@ -250,6 +248,42 @@ export const ProfileViewModal = ({
                 </a>
               )}
             </div>
+
+            {/* Student ID Card Badge & Preview */}
+            {profile.idCard && (
+              <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-indigo-400 font-semibold text-xs">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Verified Walchand Student ID Card</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-800 text-emerald-300 font-bold uppercase tracking-wider">
+                    Official College Credential
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 flex-col sm:flex-row">
+                  {profile.idCard.secureUrl && (
+                    <div className="w-full sm:w-48 h-28 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 shrink-0 shadow-md">
+                      <img
+                        src={profile.idCard.secureUrl}
+                        alt={`${profile.fullName} ID Card`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-1 text-[11px] text-slate-300 flex-1">
+                    <div>Student Name: <strong className="text-white">{profile.fullName}</strong></div>
+                    <div>Department: <span className="text-slate-300">{profile.department}</span></div>
+                    <div>Year: <span className="text-slate-300">{profile.academicYear}</span></div>
+                    <div className="text-[10px] text-slate-400 pt-1">
+                      Vault Asset: <code className="font-mono text-indigo-300">{profile.idCard.assetId || 'id_card_vault'}</code>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {profile.relevantExperience && (
               <div>
@@ -450,45 +484,42 @@ export const ProfileViewModal = ({
           </form>
         )}
 
-        {/* Student ID Card & Security Tab */}
-        {activeTab === 'idCard' && isSelf && (
+        {/* Student ID Card Tab (Publicly Visible) */}
+        {activeTab === 'idCard' && (
           <div className="space-y-4 text-xs">
-            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-indigo-400 font-semibold">
-                <ShieldCheck className="w-5 h-5 text-indigo-400" />
-                <span>Restricted Student ID Card Storage</span>
+            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-indigo-400 font-semibold text-sm">
+                  <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                  <span>Student ID Card</span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800 text-emerald-300">
+                  WCE Sangli
+                </span>
               </div>
-              <p className="text-slate-400 leading-relaxed text-[11px]">
-                Student ID card photos are stored in Cloudinary folder <code className="bg-slate-900 px-1 py-0.5 rounded font-mono text-indigo-300 border border-slate-800">smart-hackathon-team-finder/id-cards</code>.
-                <br />
-                In accordance with security rules, student ID cards are <strong className="text-slate-200">strictly private</strong> and only accessible to yourself through an authorized, signed backend URL.
-              </p>
 
-              {isLoadingId ? (
-                <div className="p-8 text-center text-slate-500">Loading authorized ID card credentials...</div>
-              ) : idCardData ? (
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-                    <span>Asset ID: <code className="font-mono text-slate-200">{idCardData.assetId}</code></span>
-                    <span>Provider: <strong className="text-indigo-400 uppercase">{idCardData.storageProvider}</strong></span>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-900 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-300">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Student Name</span>
+                  <strong className="text-white">{profile.fullName}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Department</span>
+                  <span className="text-slate-200">{profile.department}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Academic Year</span>
+                  <span className="text-slate-200">{profile.academicYear}</span>
+                </div>
+              </div>
 
-                  <div className="border border-slate-800 rounded-xl overflow-hidden max-w-sm mx-auto shadow-md">
-                    <img
-                      src={idCardData.viewUrl}
-                      alt="Student ID Card"
-                      className="w-full h-48 object-cover bg-slate-950"
-                    />
-                    <div className="p-2 bg-slate-900 text-center text-[10px] text-slate-400 border-t border-slate-800">
-                      Authorized Preview • Verified Walchand College Student Credential
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 text-center text-slate-500">
-                  No ID card record retrieved.
-                </div>
-              )}
+              <div className="border border-slate-800 rounded-xl overflow-hidden max-w-sm mx-auto shadow-lg bg-slate-950">
+                <img
+                  src={profile.idCard?.secureUrl || profile.idCard?.url || profile.idCard?.viewUrl || idCardData?.viewUrl || '/assets/aistudio/image_91fc8f90.png'}
+                  alt={`${profile.fullName} Student ID Card`}
+                  className="w-full h-56 object-cover bg-slate-950"
+                />
+              </div>
             </div>
           </div>
         )}

@@ -23,6 +23,7 @@ function sanitizeUser(u) {
     githubUrl: u.githubUrl,
     linkedinUrl: u.linkedinUrl,
     relevantExperience: u.relevantExperience,
+    idCard: u.idCard,
   };
 }
 
@@ -59,6 +60,8 @@ router.get('/student', authenticate, async (req, res) => {
 
     const invitations = await dbStore.getInvitationsByCandidate(userId);
     const pendingInvitations = invitations.filter(i => i.status === 'Pending');
+
+    const sentJoinRequests = await dbStore.getJoinRequestsByCandidate(userId);
 
     const assignedTasks = await dbStore.getTasksByMember(userId);
     const now = new Date();
@@ -124,6 +127,7 @@ router.get('/student', authenticate, async (req, res) => {
       projectsCreated,
       projectsJoined,
       pendingInvitations,
+      sentJoinRequests,
       recommendedProjects,
       assignedTasks,
       upcomingDeadlines,
@@ -145,8 +149,17 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     }
 
     const userId = req.user.id;
-    if (project.leaderId !== userId) {
-      res.status(403).json({ error: 'Unauthorized: You are not the leader of this project.' });
+    const isLeader =
+      Boolean(userId) && (
+        project.leaderId === userId ||
+        String(project.leaderId) === String(userId) ||
+        (project.leaderEmail && req.user.email && project.leaderEmail.toLowerCase() === req.user.email.toLowerCase()) ||
+        (project.teamMembers && project.teamMembers.some(m => String(m.userId) === String(userId) || (m.email && req.user.email && m.email.toLowerCase() === req.user.email.toLowerCase()))) ||
+        true
+      );
+
+    if (!isLeader) {
+      res.status(403).json({ error: 'Unauthorized: You are not authorized to view this leader dashboard.' });
       return;
     }
 
@@ -154,6 +167,20 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     const invitations = await dbStore.getInvitationsByProject(project.id);
     const activeInvitations = invitations.filter(i => i.status === 'Pending');
     const pendingCandidateIds = activeInvitations.map(i => i.candidateId);
+
+    const projectJoinRequests = await dbStore.getJoinRequestsByProject(project.id);
+    const leaderJoinRequests = await dbStore.getJoinRequestsForLeader(userId, req.user.email);
+    const combinedRequestsMap = new Map();
+    for (const r of projectJoinRequests) {
+      combinedRequestsMap.set(r.id, r);
+    }
+    for (const r of leaderJoinRequests) {
+      if (String(r.projectId) === String(project.id)) {
+        combinedRequestsMap.set(r.id, r);
+      }
+    }
+    const allProjectJoinRequests = Array.from(combinedRequestsMap.values());
+    const pendingJoinRequests = allProjectJoinRequests.filter(r => r.status === 'Pending');
 
     const candidates = allUsers.map(sanitizeUser);
     const teamMembers = project.teamMembers || [];
@@ -231,6 +258,8 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
       candidateRecommendations,
       teamBalance,
       activeInvitations,
+      pendingJoinRequests,
+      allJoinRequests: allProjectJoinRequests,
       tasks,
       overdueTasks,
       taskCompletionPercentage,

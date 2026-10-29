@@ -9,28 +9,27 @@ export const UserSchema = new Schema({
     unique: true,
     lowercase: true,
     trim: true,
-    match: [/^[a-zA-Z0-9._%+-]+@walchandsangli\.ac\.in$/, 'Must be a valid Walchand email (name.surname@walchandsangli.ac.in)'],
+    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Must be a valid email address'],
   },
   passwordHash: { type: String, required: true },
   department: { type: String, required: true },
   academicYear: {
     type: String,
     required: true,
-    enum: ['First Year', 'Second Year', 'Third Year', 'Fourth Year'],
+    default: 'Third Year',
   },
   skills: [{
     name: { type: String, required: true, trim: true },
-    proficiency: { type: String, enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'], default: 'Intermediate' },
+    proficiency: { type: String, default: 'Intermediate' },
   }],
   experienceLevel: {
     type: String,
-    enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
     default: 'Intermediate',
   },
   interests: [{ type: String, trim: true }],
   preferredRoles: [{ type: String, trim: true }],
   availability: { type: String, default: '15-20 hrs/week' },
-  bio: { type: String, default: '' },
+  bio: { type: String, default: 'Walchand College engineering student and active hackathon participant.' },
   githubUrl: { type: String },
   linkedinUrl: { type: String },
   relevantExperience: { type: String },
@@ -40,10 +39,10 @@ export const UserSchema = new Schema({
     format: { type: String },
     secureUrl: { type: String },
     uploadedAt: { type: Date, default: Date.now },
-    isRestricted: { type: Boolean, default: true },
-    storageProvider: { type: String, default: 'cloudinary' },
+    isRestricted: { type: Boolean, default: false },
+    storageProvider: { type: String, default: 'secure-vault' },
   },
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 export const ProjectSchema = new Schema({
   name: { type: String, required: true, trim: true },
@@ -68,34 +67,54 @@ export const ProjectSchema = new Schema({
     enum: ['Open', 'Closed', 'Completed', 'Cancelled'],
     default: 'Open',
   },
-  leaderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  leaderId: { type: Schema.Types.Mixed, required: true },
+  leaderName: { type: String },
+  leaderEmail: { type: String },
   teamMembers: [{
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: Schema.Types.Mixed, required: true },
+    fullName: { type: String },
+    name: { type: String },
+    email: { type: String },
     role: { type: String, required: true },
+    department: { type: String },
+    academicYear: { type: String },
     joinedAt: { type: Date, default: Date.now },
   }],
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 export const InvitationSchema = new Schema({
-  projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
-  candidateId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  leaderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  projectId: { type: Schema.Types.Mixed, required: true },
+  projectName: { type: String },
+  projectDomain: { type: String },
+  candidateId: { type: Schema.Types.Mixed, required: true },
+  candidateName: { type: String },
+  candidateEmail: { type: String },
+  candidateDepartment: { type: String },
+  candidateAcademicYear: { type: String },
+  leaderId: { type: Schema.Types.Mixed, required: true },
+  leaderName: { type: String },
+  leaderEmail: { type: String },
   proposedRole: { type: String, required: true },
   message: { type: String, default: '' },
+  type: {
+    type: String,
+    enum: ['invitation', 'join_request'],
+    default: 'invitation',
+  },
   status: {
     type: String,
     enum: ['Pending', 'Accepted', 'Rejected', 'Cancelled'],
     default: 'Pending',
   },
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 InvitationSchema.index({ projectId: 1, candidateId: 1, status: 1 });
 
 export const TaskSchema = new Schema({
-  projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+  projectId: { type: Schema.Types.Mixed, required: true },
   title: { type: String, required: true, trim: true },
   description: { type: String, default: '' },
-  assignedTo: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  assignedTo: { type: Schema.Types.Mixed, required: true },
+  createdBy: { type: Schema.Types.Mixed, required: true },
   priority: {
     type: String,
     enum: ['Low', 'Medium', 'High', 'Urgent'],
@@ -108,12 +127,14 @@ export const TaskSchema = new Schema({
   },
   deadline: { type: Date, required: true },
   completedAt: { type: Date },
+  completedOnTime: { type: Boolean },
+  isOverdue: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export const LeaderEvaluationSchema = new Schema({
-  projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
-  leaderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  memberId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  projectId: { type: Schema.Types.Mixed, required: true },
+  leaderId: { type: Schema.Types.Mixed, required: true },
+  memberId: { type: Schema.Types.Mixed, required: true },
   evaluationPeriod: { type: String, default: 'Final Sprint' },
   ratings: {
     taskContribution: { type: Number, min: 1, max: 5, required: true },
@@ -127,9 +148,9 @@ export const LeaderEvaluationSchema = new Schema({
 }, { timestamps: true });
 
 export const PeerEvaluationSchema = new Schema({
-  projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
-  evaluatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  evaluatedMemberId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  projectId: { type: Schema.Types.Mixed, required: true },
+  evaluatorId: { type: Schema.Types.Mixed, required: true },
+  evaluatedMemberId: { type: Schema.Types.Mixed, required: true },
   evaluationPeriod: { type: String, default: 'Final Sprint' },
   ratings: {
     taskContribution: { type: Number, min: 1, max: 5, required: true },
@@ -144,8 +165,8 @@ export const PeerEvaluationSchema = new Schema({
 }, { timestamps: true });
 
 export const TeamMessageSchema = new Schema({
-  projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
-  authorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  projectId: { type: Schema.Types.Mixed, required: true },
+  authorId: { type: Schema.Types.Mixed, required: true },
   authorName: { type: String, required: true },
   authorRole: { type: String, default: 'Team Member' },
   content: { type: String, required: true, trim: true },

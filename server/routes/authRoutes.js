@@ -71,12 +71,16 @@ router.post('/register', upload.single('idCardPhoto'), async (req, res) => {
       uploadedIdCardData,
     } = req.body;
 
-    if (!fullName || !email || !password || !department || !academicYear || !bio) {
-      res.status(400).json({ error: 'Please fill in all mandatory fields.' });
+    if (!fullName || !email || !password) {
+      res.status(400).json({ error: 'Please provide Full Name, College Email, and Password.' });
       return;
     }
 
-    if (password !== confirmPassword) {
+    const safeDepartment = (department && department.trim()) || 'Computer Science and Engineering';
+    const safeAcademicYear = (academicYear && VALID_ACADEMIC_YEARS.includes(academicYear)) ? academicYear : 'Third Year';
+    const safeBio = (bio && bio.trim()) || 'Walchand College engineering student and active hackathon participant.';
+
+    if (confirmPassword && password !== confirmPassword) {
       res.status(400).json({ error: 'Password and Confirm Password do not match.' });
       return;
     }
@@ -87,32 +91,28 @@ router.post('/register', upload.single('idCardPhoto'), async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    if (!WCE_EMAIL_REGEX.test(normalizedEmail)) {
+    const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    if (!isValidEmail) {
       res.status(400).json({
-        error: 'Invalid college email. Registration requires an official Walchand College email format: name.surname@walchandsangli.ac.in (e.g., vishwajeet.patil@walchandsangli.ac.in). Unrelated domains are rejected.',
-      });
-      return;
-    }
-
-    if (!VALID_ACADEMIC_YEARS.includes(academicYear)) {
-      res.status(400).json({
-        error: `Academic Year must be one of: ${VALID_ACADEMIC_YEARS.join(', ')}.`,
+        error: 'Please enter a valid email address (e.g., name.surname@walchandsangli.ac.in or student@domain.com).',
       });
       return;
     }
 
     const existingUser = await dbStore.findUserByEmail(normalizedEmail);
     if (existingUser) {
-      res.status(409).json({ error: 'A student account with this Walchand college email already exists.' });
+      res.status(409).json({ error: 'A student account with this email already exists. Please Sign In instead.' });
       return;
     }
 
     let idCard = null;
     if (req.file) {
       idCard = await uploadIdCardImage(req.file.buffer, req.file.originalname, req.file.mimetype);
+      if (idCard) idCard.isRestricted = false;
     } else if (uploadedIdCardData) {
       try {
         idCard = typeof uploadedIdCardData === 'string' ? JSON.parse(uploadedIdCardData) : uploadedIdCardData;
+        if (idCard) idCard.isRestricted = false;
       } catch (e) {
         // ignore
       }
@@ -125,7 +125,7 @@ router.post('/register', upload.single('idCardPhoto'), async (req, res) => {
         format: 'png',
         secureUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80',
         uploadedAt: new Date().toISOString(),
-        isRestricted: true,
+        isRestricted: false,
         storageProvider: 'secure-local-vault',
       };
     }
@@ -161,14 +161,14 @@ router.post('/register', upload.single('idCardPhoto'), async (req, res) => {
       fullName: fullName.trim(),
       email: normalizedEmail,
       passwordHash,
-      department: department.trim(),
-      academicYear,
+      department: safeDepartment,
+      academicYear: safeAcademicYear,
       skills: parsedSkills,
       experienceLevel: experienceLevel || 'Intermediate',
       interests: parsedInterests,
       preferredRoles: parsedRoles,
       availability: availability || '15-20 hrs/week',
-      bio: bio.trim(),
+      bio: safeBio,
       githubUrl: githubUrl ? githubUrl.trim() : undefined,
       linkedinUrl: linkedinUrl ? linkedinUrl.trim() : undefined,
       relevantExperience: relevantExperience ? relevantExperience.trim() : undefined,
@@ -204,11 +204,15 @@ router.post('/login', async (req, res) => {
       return;
     }
 
-    const normalizedEmail = String(email).toLowerCase().trim();
+    const searchIdentifier = String(email).trim();
+    const normalizedEmail = searchIdentifier.toLowerCase();
     let user = await dbStore.findUserByEmail(normalizedEmail);
     if (!user) {
+      user = await dbStore.findUserByName(searchIdentifier);
+    }
+    if (!user) {
       res.status(401).json({
-        error: 'No student account found for this Walchand college email. Please verify your email or click "Register Student Account".',
+        error: 'No student account found for this email or name. Please verify your email or click "Register Student Account".',
       });
       return;
     }
@@ -221,20 +225,6 @@ router.post('/login', async (req, res) => {
       isMatch = await bcrypt.compare(cleanPass, user.passwordHash);
       if (!isMatch && cleanPass !== rawPassword) {
         isMatch = await bcrypt.compare(rawPassword, user.passwordHash);
-      }
-    }
-
-    // Direct match fallback for Vishwajeet Patil account
-    if (!isMatch && normalizedEmail === 'vishwajeet.patil@walchandsangli.ac.in') {
-      if (cleanPass === 'Vishwajeet@2006' || cleanPass.toLowerCase() === 'vishwajeet@2006') {
-        isMatch = true;
-      }
-    }
-
-    // Direct match fallback for default demo accounts
-    if (!isMatch && (normalizedEmail === 'rohit.patil@walchandsangli.ac.in' || normalizedEmail === 'aniket.shinde@walchandsangli.ac.in' || normalizedEmail === 'neha.kulkarni@walchandsangli.ac.in')) {
-      if (cleanPass === 'Password@123') {
-        isMatch = true;
       }
     }
 

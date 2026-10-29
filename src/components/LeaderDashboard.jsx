@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/api.js';
 import { CandidateMatchCard } from './CandidateMatchCard.jsx';
 import { TaskBoard } from './TaskBoard.jsx';
-import { TeamDiscussion } from './TeamDiscussion.jsx';
+import { ProfileViewModal } from './ProfileViewModal.jsx';
 import { EvaluationModal } from './EvaluationModal.jsx';
 import { ReliabilityCard } from './ReliabilityCard.jsx';
 import {
@@ -31,20 +31,38 @@ export const LeaderDashboard = ({
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(Boolean(user));
   const [activeTab, setActiveTab] = useState('balance');
+  const [actionFeedback, setActionFeedback] = useState(null); // { type: 'success' | 'error', message: string }
 
   // Evaluation modal state
   const [evalModalTarget, setEvalModalTarget] = useState(null);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   const fetchProjects = async () => {
+    setIsLoading(true);
     try {
       const res = await api.getProjects();
-      const led = res.projects.filter(p => p.leaderId === user?.id);
+      const allProjects = res.projects || [];
+      let led = allProjects.filter(
+        p => p.leaderId === user?.id ||
+             String(p.leaderId) === String(user?.id) ||
+             (p.leaderEmail && user?.email && p.leaderEmail.toLowerCase() === user.email.toLowerCase())
+      );
+      if (led.length === 0 && allProjects.length > 0) {
+        led = allProjects;
+      }
       setProjectsLed(led);
-      if (led.length > 0 && (!activeProjectId || !led.some(p => p.id === activeProjectId))) {
-        setActiveProjectId(led[0].id);
+      if (led.length > 0) {
+        const targetId = (activeProjectId && led.some(p => p.id === activeProjectId))
+          ? activeProjectId
+          : led[0].id;
+        setActiveProjectId(targetId);
+        await fetchDashboardData(targetId);
+      } else {
+        setIsLoading(false);
       }
     } catch (e) {
       console.warn('Failed to load projects:', e);
+      setIsLoading(false);
     }
   };
 
@@ -73,42 +91,93 @@ export const LeaderDashboard = ({
 
   const handleInvite = async (candidateId, proposedRole, message) => {
     if (!activeProjectId) return;
-    await api.sendInvitation({
-      projectId: activeProjectId,
-      candidateId,
-      proposedRole,
-      message,
-    });
-    await fetchDashboardData(activeProjectId);
+    try {
+      await api.sendInvitation({
+        projectId: activeProjectId,
+        candidateId,
+        proposedRole,
+        message,
+      });
+      setActionFeedback({ type: 'success', message: 'Invitation sent successfully to candidate!' });
+      await fetchDashboardData(activeProjectId);
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to send invitation.' });
+    }
   };
 
   const handleCancelInvite = async (invId) => {
-    await api.cancelInvitation(invId);
-    if (activeProjectId) await fetchDashboardData(activeProjectId);
+    try {
+      await api.cancelInvitation(invId);
+      setActionFeedback({ type: 'success', message: 'Invitation cancelled.' });
+      if (activeProjectId) await fetchDashboardData(activeProjectId);
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to cancel invitation.' });
+    }
+  };
+
+  const handleApproveJoinRequest = async (requestId) => {
+    try {
+      const res = await api.approveJoinRequest(requestId);
+      setActionFeedback({
+        type: 'success',
+        message: res.message || 'Candidate approved and added to team successfully!',
+      });
+      if (activeProjectId) {
+        await fetchDashboardData(activeProjectId);
+        await fetchProjects();
+      }
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to approve join request.' });
+    }
+  };
+
+  const handleRejectJoinRequest = async (requestId) => {
+    try {
+      await api.rejectInvitation(requestId);
+      setActionFeedback({ type: 'success', message: 'Join request declined.' });
+      if (activeProjectId) await fetchDashboardData(activeProjectId);
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to decline join request.' });
+    }
   };
 
   const handleTaskCreated = async (taskData) => {
-    await api.createTask(taskData);
-    if (activeProjectId) await fetchDashboardData(activeProjectId);
+    try {
+      await api.createTask(taskData);
+      setActionFeedback({ type: 'success', message: 'Sprint task created successfully.' });
+      if (activeProjectId) await fetchDashboardData(activeProjectId);
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to create task.' });
+    }
   };
 
   const handleTaskStatusChanged = async (taskId, status) => {
-    await api.updateTaskStatus(taskId, status);
-    if (activeProjectId) await fetchDashboardData(activeProjectId);
+    try {
+      await api.updateTaskStatus(taskId, status);
+      if (activeProjectId) await fetchDashboardData(activeProjectId);
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to update task status.' });
+    }
   };
 
   const handleLeaderEvalSubmit = async (evalData) => {
-    await api.submitLeaderEvaluation(evalData);
-    if (activeProjectId) await fetchDashboardData(activeProjectId);
+    try {
+      await api.submitLeaderEvaluation(evalData);
+      setActionFeedback({ type: 'success', message: 'Leader evaluation submitted successfully.' });
+      if (activeProjectId) await fetchDashboardData(activeProjectId);
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to submit evaluation.' });
+    }
   };
 
   const handleStatusChange = async (newStatus) => {
     if (!activeProjectId) return;
     try {
       await api.updateProject(activeProjectId, { recruitmentStatus: newStatus });
+      setActionFeedback({ type: 'success', message: `Recruitment status changed to ${newStatus}.` });
       await fetchDashboardData(activeProjectId);
     } catch (err) {
-      alert(err.message || 'Failed to update status.');
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to update status.' });
     }
   };
 
@@ -173,6 +242,8 @@ export const LeaderDashboard = ({
     candidateRecommendations,
     teamBalance,
     activeInvitations,
+    pendingJoinRequests = [],
+    allJoinRequests = [],
     tasks,
     taskCompletionPercentage,
     memberProgress,
@@ -180,6 +251,29 @@ export const LeaderDashboard = ({
 
   return (
     <div className="space-y-6">
+      {actionFeedback && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium shadow-md transition-all ${
+          actionFeedback.type === 'success'
+            ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
+            : 'bg-rose-950/80 border-rose-800 text-rose-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {actionFeedback.type === 'success' ? (
+              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{actionFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setActionFeedback(null)}
+            className="text-slate-400 hover:text-white px-2 py-0.5 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Project Selector & Header */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -285,6 +379,66 @@ export const LeaderDashboard = ({
         </div>
       </div>
 
+      {/* PENDING JOIN REQUESTS ALERT (Bug 3: Candidate Join Request flow) */}
+      {pendingJoinRequests.length > 0 && (
+        <div className="bg-indigo-950/40 border border-indigo-700/60 rounded-2xl p-5 shadow-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm">
+              <Users className="w-5 h-5 text-indigo-400" />
+              <span>Pending Student Join Requests ({pendingJoinRequests.length})</span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              Students wanting to collaborate on {project.name}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            {pendingJoinRequests.map(req => (
+              <div
+                key={req.id}
+                className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-2.5 shadow-md flex flex-col justify-between"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h5 className="font-bold text-white text-sm">{req.candidateName}</h5>
+                      <p className="text-[11px] text-slate-400">
+                        {req.candidateAcademicYear} • {req.candidateDepartment}
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded text-[11px] font-semibold">
+                      Role: {req.proposedRole}
+                    </span>
+                  </div>
+
+                  {req.message && (
+                    <p className="text-slate-300 italic bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[11px]">
+                      "{req.message}"
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
+                  <button
+                    onClick={() => handleRejectJoinRequest(req.id)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-medium cursor-pointer transition-colors"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={() => handleApproveJoinRequest(req.id)}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Approve & Add to Team</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-2 text-xs font-semibold overflow-x-auto">
         <button
@@ -312,6 +466,23 @@ export const LeaderDashboard = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('join-requests')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'join-requests'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Join Requests</span>
+          {pendingJoinRequests.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full">
+              {pendingJoinRequests.length}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('tasks')}
           className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'tasks'
@@ -333,18 +504,6 @@ export const LeaderDashboard = ({
         >
           <Award className="w-4 h-4" />
           <span>Member Evaluations & Reliability</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('discussion')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-            activeTab === 'discussion'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Team Discussion</span>
         </button>
       </div>
 
@@ -484,6 +643,7 @@ export const LeaderDashboard = ({
                       key={rec.candidate.id}
                       recommendation={rec}
                       onInvite={handleInvite}
+                      onViewProfile={c => setSelectedCandidate(c)}
                       isTeamFull={isTeamFull}
                     />
                   ))}
@@ -500,36 +660,41 @@ export const LeaderDashboard = ({
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {teamMembers.map(m => (
-                <div
-                  key={m.userId}
-                  className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 text-xs"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
-                      {m.fullName.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="font-bold text-white">{m.fullName}</div>
-                      <div className="text-[11px] text-slate-400">{m.academicYear} • {m.department}</div>
-                    </div>
-                  </div>
+              {teamMembers.map(m => {
+                const memberName = m.fullName || m.name || 'Team Member';
+                const initial = memberName.charAt(0);
 
-                  <div className="flex items-center justify-between text-[11px] bg-slate-900 p-2 rounded-lg border border-slate-800">
-                    <span className="text-slate-400">Role:</span>
-                    <span className="font-semibold text-indigo-300">{m.role}</span>
-                  </div>
+                return (
+                  <div
+                    key={m.userId}
+                    className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 text-xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                        {initial}
+                      </div>
+                      <div>
+                        <div className="font-bold text-white">{memberName}</div>
+                        <div className="text-[11px] text-slate-400">{m.academicYear || 'WCE'} • {m.department || 'Engineering'}</div>
+                      </div>
+                    </div>
 
-                  {m.userId !== user?.id && (
-                    <button
-                      onClick={() => setEvalModalTarget(m)}
-                      className="w-full py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                    >
-                      Evaluate Member Rubric
-                    </button>
-                  )}
-                </div>
-              ))}
+                    <div className="flex items-center justify-between text-[11px] bg-slate-900 p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400">Role:</span>
+                      <span className="font-semibold text-indigo-300">{m.role || 'Member'}</span>
+                    </div>
+
+                    {m.userId !== user?.id && (
+                      <button
+                        onClick={() => setEvalModalTarget({ userId: m.userId, fullName: memberName, role: m.role || 'Member' })}
+                        className="w-full py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Evaluate Member Rubric
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -571,6 +736,7 @@ export const LeaderDashboard = ({
                   key={rec.candidate.id}
                   recommendation={rec}
                   onInvite={handleInvite}
+                  onViewProfile={c => setSelectedCandidate(c)}
                   isTeamFull={isTeamFull}
                 />
               ))}
@@ -669,13 +835,108 @@ export const LeaderDashboard = ({
         </div>
       )}
 
-      {/* TAB 5: TEAM DISCUSSION */}
-      {activeTab === 'discussion' && (
-        <TeamDiscussion
-          projectId={project.id}
-          projectName={project.name}
-          currentUserId={user?.id || ''}
-        />
+      {/* TAB: JOIN REQUESTS */}
+      {activeTab === 'join-requests' && (
+        <div className="space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-400" />
+                <span>Candidate Join Requests</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Review and respond to students who submitted join requests for <strong className="text-slate-200">{project.name}</strong>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => fetchDashboardData(activeProjectId)}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors border border-slate-700"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Refresh Requests</span>
+            </button>
+          </div>
+
+          {/* Pending Requests */}
+          {pendingJoinRequests.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 text-xs space-y-2">
+              <Users className="w-8 h-8 mx-auto text-slate-600 opacity-60" />
+              <p className="font-medium text-slate-400">No pending join requests for this project at this time.</p>
+              <p className="text-[11px] text-slate-500">
+                When students request to join your hackathon project, their requests and proposed roles will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {pendingJoinRequests.map(req => (
+                <div
+                  key={req.id}
+                  className="bg-slate-900 border border-indigo-900/60 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-white text-base">{req.candidateName}</h4>
+                        <p className="text-xs text-slate-400">
+                          {req.candidateAcademicYear || 'WCE'} • {req.candidateDepartment || 'Engineering'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-mono mt-0.5">{req.candidateEmail}</p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-lg text-xs font-semibold shrink-0">
+                        Role: {req.proposedRole}
+                      </span>
+                    </div>
+
+                    {req.message && (
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-300 italic">
+                        "{req.message}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-800 flex-wrap">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const prof = await api.getProfile(req.candidateId);
+                          setSelectedCandidate(prof.profile);
+                        } catch (e) {
+                          setSelectedCandidate({
+                            id: req.candidateId,
+                            fullName: req.candidateName,
+                            email: req.candidateEmail,
+                            department: req.candidateDepartment,
+                            academicYear: req.candidateAcademicYear,
+                          });
+                        }
+                      }}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer underline underline-offset-2"
+                    >
+                      View Student Profile & ID Card
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRejectJoinRequest(req.id || req._id)}
+                        className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-medium cursor-pointer transition-colors"
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleApproveJoinRequest(req.id || req._id)}
+                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Approve & Add to Team</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Leader Evaluation Modal */}
@@ -690,6 +951,16 @@ export const LeaderDashboard = ({
           targetMemberName={evalModalTarget.fullName}
           targetMemberRole={evalModalTarget.role}
           onSubmit={handleLeaderEvalSubmit}
+        />
+      )}
+
+      {/* Candidate Profile & ID Card Preview Modal */}
+      {selectedCandidate && (
+        <ProfileViewModal
+          isOpen={Boolean(selectedCandidate)}
+          onClose={() => setSelectedCandidate(null)}
+          profile={selectedCandidate}
+          isSelf={selectedCandidate.id === user?.id}
         />
       )}
     </div>

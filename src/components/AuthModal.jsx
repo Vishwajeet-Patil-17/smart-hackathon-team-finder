@@ -9,11 +9,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Login state - prefilled with Vishwajeet Patil credentials or last registered email
-  const [loginEmail, setLoginEmail] = useState(() => localStorage.getItem('wce_last_registered_email') || 'vishwajeet.patil@walchandsangli.ac.in');
-  const [loginPassword, setLoginPassword] = useState(() => localStorage.getItem('wce_last_registered_email') ? '' : 'Vishwajeet@2006');
-  const lastRegisteredEmail = localStorage.getItem('wce_last_registered_email');
-  const lastRegisteredName = localStorage.getItem('wce_last_registered_name');
+  // Login state - clean input defaults
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   // Register state
   const [fullName, setFullName] = useState('');
@@ -24,7 +22,7 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [academicYear, setAcademicYear] = useState('Third Year');
   const [experienceLevel, setExperienceLevel] = useState('Intermediate');
   const [availability, setAvailability] = useState('15-20 hrs/week');
-  const [bio, setBio] = useState('');
+  const [bio, setBio] = useState('Walchand College engineering student and active hackathon participant.');
   const [githubUrl, setGithubUrl] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [relevantExperience, setRelevantExperience] = useState('');
@@ -70,7 +68,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
     try {
       const cleanEmail = (loginEmail || '').trim().toLowerCase();
       await login(cleanEmail, loginPassword);
-      localStorage.setItem('wce_last_registered_email', cleanEmail);
       onClose();
     } catch (err) {
       setErrorMsg(err.message || 'Login failed.');
@@ -86,11 +83,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
 
     try {
       const normalizedEmail = email.toLowerCase().trim();
-      const wcePattern = /^[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)+@walchandsangli\.ac\.in$/;
-      if (!wcePattern.test(normalizedEmail)) {
-        throw new Error(
-          'Email must strictly follow the Walchand College pattern: name.surname@walchandsangli.ac.in (e.g. vishwajeet.patil@walchandsangli.ac.in). Unrelated domains are rejected.'
-        );
+      const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+      if (!isValidEmail) {
+        throw new Error('Please enter a valid email address (e.g. ndpawar1511@gmail.com or name.surname@walchandsangli.ac.in).');
       }
 
       if (password !== confirmPassword) {
@@ -113,8 +108,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
       formData.append('department', department);
       formData.append('academicYear', academicYear);
       formData.append('experienceLevel', experienceLevel);
-      formData.append('availability', availability);
-      formData.append('bio', bio);
+      formData.append('availability', availability || '15-20 hrs/week');
+      const userBio = (bio && bio.trim()) || 'Walchand College engineering student and active hackathon participant.';
+      formData.append('bio', userBio);
       formData.append('githubUrl', githubUrl);
       formData.append('linkedinUrl', linkedinUrl);
       formData.append('relevantExperience', relevantExperience);
@@ -127,9 +123,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
       }
 
       await register(formData);
-      localStorage.setItem('wce_last_registered_email', normalizedEmail);
-      localStorage.setItem('wce_last_registered_name', fullName.trim());
-      setLoginEmail(normalizedEmail);
       onClose();
     } catch (err) {
       setErrorMsg(err.message || 'Registration failed.');
@@ -217,58 +210,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               />
             </div>
 
-            {/* Quick Demo Credentials */}
-            <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1.5">
-              <span className="text-slate-400 font-semibold block">Quick Login Options:</span>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('vishwajeet.patil@walchandsangli.ac.in');
-                    setLoginPassword('Vishwajeet@2006');
-                    setErrorMsg('');
-                  }}
-                  className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white font-medium transition-colors cursor-pointer shadow-xs"
-                >
-                  Fill Vishwajeet Patil (vishwajeet.patil@walchandsangli.ac.in)
-                </button>
-                {lastRegisteredEmail && lastRegisteredEmail !== 'vishwajeet.patil@walchandsangli.ac.in' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginEmail(lastRegisteredEmail);
-                      setErrorMsg('');
-                    }}
-                    className="px-2 py-1 rounded bg-indigo-950/90 hover:bg-indigo-900 border border-indigo-700 text-indigo-200 transition-colors cursor-pointer font-medium"
-                  >
-                    Fill My Registered Email ({lastRegisteredName || lastRegisteredEmail})
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('rohit.patil@walchandsangli.ac.in');
-                    setLoginPassword('Password@123');
-                    setErrorMsg('');
-                  }}
-                  className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-indigo-300 transition-colors cursor-pointer"
-                >
-                  Fill Leader (Rohit Patil)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('aniket.shinde@walchandsangli.ac.in');
-                    setLoginPassword('Password@123');
-                    setErrorMsg('');
-                  }}
-                  className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-indigo-300 transition-colors cursor-pointer"
-                >
-                  Fill Candidate (Aniket Shinde)
-                </button>
-              </div>
-            </div>
-
             <button
               type="submit"
               disabled={isSubmitting}
@@ -276,6 +217,36 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
             >
               {isSubmitting ? 'Authenticating...' : 'Sign In to Student Dashboard'}
             </button>
+
+            <div className="pt-3 border-t border-slate-800 space-y-1.5">
+              <p className="text-[11px] text-slate-400 font-medium">Quick Sign In (1-Click Fill):</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail('ndpawar1511@gmail.com');
+                    setLoginPassword('Password@123');
+                  }}
+                  className="p-2 bg-slate-950/80 hover:bg-slate-800 text-left border border-slate-800 hover:border-indigo-600 rounded-lg cursor-pointer transition-colors"
+                >
+                  <div className="text-xs font-semibold text-white">ND Pawar</div>
+                  <div className="text-[10px] text-indigo-400 truncate">ndpawar1511@gmail.com</div>
+                  <div className="text-[10px] text-slate-500">Pass: Password@123</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail('vishwajeet.patil@walchandsangli.ac.in');
+                    setLoginPassword('Password@123');
+                  }}
+                  className="p-2 bg-slate-950/80 hover:bg-slate-800 text-left border border-slate-800 hover:border-indigo-600 rounded-lg cursor-pointer transition-colors"
+                >
+                  <div className="text-xs font-semibold text-white">Vishwajeet Patil</div>
+                  <div className="text-[10px] text-indigo-400 truncate">vishwajeet.patil@...</div>
+                  <div className="text-[10px] text-slate-500">Pass: Password@123</div>
+                </button>
+              </div>
+            </div>
           </form>
         )}
 
@@ -497,10 +468,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Short Biography *</label>
+              <label className="block font-semibold text-slate-300 mb-1">Short Biography</label>
               <textarea
                 rows={2}
-                required
                 placeholder="Share your technical background and what you are looking to build in hackathons..."
                 value={bio}
                 onChange={e => setBio(e.target.value)}

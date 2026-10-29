@@ -27,6 +27,8 @@ export const StudentDashboard = ({
   const [isLoading, setIsLoading] = useState(Boolean(user));
   const [selectedProject, setSelectedProject] = useState(null);
 
+  const [actionFeedback, setActionFeedback] = useState(null);
+
   // Peer eval modal state
   const [peerEvalTarget, setPeerEvalTarget] = useState(null);
 
@@ -52,18 +54,20 @@ export const StudentDashboard = ({
   const handleAcceptInvite = async (invId) => {
     try {
       await api.acceptInvitation(invId);
+      setActionFeedback({ type: 'success', message: 'Invitation accepted! You have joined the hackathon team.' });
       await fetchDashboard();
     } catch (err) {
-      alert(err.message || 'Failed to accept invitation.');
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to accept invitation.' });
     }
   };
 
   const handleRejectInvite = async (invId) => {
     try {
       await api.rejectInvitation(invId);
+      setActionFeedback({ type: 'success', message: 'Invitation declined.' });
       await fetchDashboard();
     } catch (err) {
-      alert(err.message || 'Failed to reject invitation.');
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to reject invitation.' });
     }
   };
 
@@ -72,7 +76,7 @@ export const StudentDashboard = ({
       await api.updateTaskStatus(taskId, status);
       await fetchDashboard();
     } catch (err) {
-      alert(err.message || 'Failed to update task.');
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to update task.' });
     }
   };
 
@@ -134,6 +138,7 @@ export const StudentDashboard = ({
     projectsCreated,
     projectsJoined,
     pendingInvitations,
+    sentJoinRequests = [],
     recommendedProjects,
     assignedTasks,
     peerEvaluationsToSubmit,
@@ -142,6 +147,24 @@ export const StudentDashboard = ({
 
   return (
     <div className="space-y-6">
+      {actionFeedback && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium shadow-md transition-all ${
+          actionFeedback.type === 'success'
+            ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
+            : 'bg-rose-950/80 border-rose-800 text-rose-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span>{actionFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setActionFeedback(null)}
+            className="text-slate-400 hover:text-white px-2 py-0.5 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -234,6 +257,49 @@ export const StudentDashboard = ({
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Accept & Join Team
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sent Join Requests Status */}
+      {sentJoinRequests.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-white text-sm flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-400" />
+              <span>Your Sent Join Requests ({sentJoinRequests.length})</span>
+            </h4>
+            <span className="text-[11px] text-slate-400">Status of your team applications</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {sentJoinRequests.map(req => (
+              <div
+                key={req.id}
+                className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5 text-xs flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="font-bold text-white leading-tight">{req.projectName}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
+                      req.status === 'Accepted'
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                        : req.status === 'Rejected'
+                        ? 'bg-rose-950 text-rose-300 border-rose-800'
+                        : 'bg-indigo-950 text-indigo-300 border-indigo-800'
+                    }`}>
+                      {req.status}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Applied Role: <strong className="text-slate-200">{req.proposedRole}</strong>
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Leader: {req.leaderName}
+                  </p>
                 </div>
               </div>
             ))}

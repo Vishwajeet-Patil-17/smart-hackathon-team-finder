@@ -26,14 +26,9 @@ export function calculateSkillMatch(requiredSkills, candidateSkills) {
 
   const matchingSkills = [];
   const missingSkills = [];
-  let totalWeight = 0;
-  let earnedScore = 0;
 
   for (const req of requiredSkills) {
     const reqNormalized = normalizeText(req.skill);
-    const weight = req.isMandatory ? 1.5 : 1.0;
-    totalWeight += weight;
-
     const matched = (candidateSkills || []).find(
       s => normalizeText(s.name) === reqNormalized ||
            reqNormalized.includes(normalizeText(s.name)) ||
@@ -42,14 +37,13 @@ export function calculateSkillMatch(requiredSkills, candidateSkills) {
 
     if (matched) {
       matchingSkills.push(req.skill);
-      const profWeight = PROFICIENCY_WEIGHTS[matched.proficiency] || 0.8;
-      earnedScore += weight * profWeight;
     } else {
       missingSkills.push(req.skill);
     }
   }
 
-  const normalizedScore = totalWeight > 0 ? (earnedScore / totalWeight) * 100 : 100;
+  // Exact formula requested: (skills available from candidate / total skills) * 100
+  const normalizedScore = (matchingSkills.length / requiredSkills.length) * 100;
   return {
     score: Math.min(100, Math.max(0, Math.round(normalizedScore * 10) / 10)),
     matchingSkills,

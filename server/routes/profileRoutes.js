@@ -20,6 +20,7 @@ function sanitizePublicProfile(user) {
     githubUrl: user.githubUrl,
     linkedinUrl: user.linkedinUrl,
     relevantExperience: user.relevantExperience,
+    idCard: user.idCard,
   };
 }
 

@@ -1,16 +1,17 @@
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import mongoose from 'mongoose';
 
 let isConnected = false;
 let connectionMode = 'memory-store';
 
-export async function connectDB() {
-  const uri = process.env.MONGODB_URI;
+const ATLAS_FALLBACK_URI = 'mongodb+srv://hackteam:Hackteam%40123@cluster0.9dvxfih.mongodb.net/hackathon-team-finder?retryWrites=true&w=majority';
 
-  if (!uri || uri.includes('<username>') || uri.includes('YOUR_MONGODB_URI')) {
-    console.log('[Database] MONGODB_URI not configured or placeholder detected. Operating in Memory/Local Store mode.');
-    connectionMode = 'memory-store';
-    isConnected = true;
-    return;
+export async function connectDB() {
+  let uri = process.env.MONGODB_URI;
+
+  if (!uri || uri.includes('<username>') || uri.includes('<db_username>') || uri.includes('YOUR_MONGODB_URI')) {
+    uri = ATLAS_FALLBACK_URI;
   }
 
   try {

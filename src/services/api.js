@@ -133,7 +133,7 @@ export const api = {
     return request(`/matching/${projectId}/balance`);
   },
 
-  // Invitations
+  // Invitations & Join Requests
   async sendInvitation(invData) {
     return request('/invitations', {
       method: 'POST',
@@ -163,6 +163,27 @@ export const api = {
 
   async cancelInvitation(invitationId) {
     return request(`/invitations/${invitationId}/cancel`, {
+      method: 'POST',
+    });
+  },
+
+  async sendJoinRequest(requestData) {
+    return request('/invitations/join-request', {
+      method: 'POST',
+      body: JSON.stringify(requestData),
+    });
+  },
+
+  async getMyJoinRequests() {
+    return request('/invitations/join-requests/my');
+  },
+
+  async getProjectJoinRequests(projectId) {
+    return request(`/invitations/join-requests/project/${projectId}`);
+  },
+
+  async approveJoinRequest(requestId) {
+    return request(`/invitations/${requestId}/approve`, {
       method: 'POST',
     });
   },
