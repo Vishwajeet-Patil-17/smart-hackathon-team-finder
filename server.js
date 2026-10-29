@@ -25,7 +25,20 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+
+  // Parse command line arguments (--port 3000 --host 0.0.0.0)
+  const args = process.argv.slice(2);
+  const portArgIdx = args.indexOf('--port');
+  const hostArgIdx = args.indexOf('--host');
+
+  let PORT = 3000;
+  if (portArgIdx !== -1 && args[portArgIdx + 1]) {
+    PORT = parseInt(args[portArgIdx + 1], 10);
+  } else if (process.env.PORT && process.env.PORT !== '8080') {
+    PORT = parseInt(process.env.PORT, 10);
+  }
+
+  const HOST = hostArgIdx !== -1 && args[hostArgIdx + 1] ? args[hostArgIdx + 1] : '0.0.0.0';
 
   // Body parser middleware
   app.use(express.json({ limit: '10mb' }));
@@ -78,12 +91,29 @@ async function startServer() {
     });
   });
 
+  // Global API error handler
+  app.use((err, req, res, next) => {
+    console.error('[API Error]:', err);
+    if (err.name === 'MongooseError' || err.name === 'MongoNetworkError' || (err.message && err.message.includes('buffering timed out'))) {
+      if (req.method === 'GET') {
+        return res.json(req.path.endsWith('s') || req.path.endsWith('s/') ? [] : {});
+      }
+      return res.status(503).json({ error: 'Service temporarily unavailable (database offline)' });
+    }
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+    }
+  });
+
   // Mount Vite middleware in development
   const isProduction = process.env.NODE_ENV === 'production';
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -97,11 +127,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
+  app.listen(PORT, HOST, () => {
     console.log(`=======================================================`);
     console.log(`  Smart Hackathon Team Finder - WCE Sangli`);
     console.log(`  Mini-Project II Full-Stack Server Running`);
-    console.log(`  Local URL: http://localhost:${PORT}`);
+    console.log(`  Local URL: http://${HOST}:${PORT}`);
     console.log(`=======================================================`);
   });
 }

@@ -4,6 +4,7 @@ import { Check, Mail, UserPlus, Sparkles, AlertCircle, Briefcase, GraduationCap,
 export const CandidateMatchCard = ({
   recommendation,
   onInvite,
+  onViewProfile,
   isTeamFull = false,
 }) => {
   const {
