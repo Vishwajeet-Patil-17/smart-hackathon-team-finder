@@ -555,7 +555,7 @@ export const StudentDashboard = ({
                       <span className="text-[10px] text-slate-400">Led by {p.leaderName}</span>
                     </div>
                     <div className="text-[11px] text-slate-300">
-                      Your Role: <strong>{p.teamMembers.find(m => m.userId === profile.id)?.role || 'Member'}</strong>
+                      Your Role: <strong>{p.teamMembers?.find(m => String(m.userId) === String(profile?.id || profile?._id) || (m.email && profile?.email && m.email.toLowerCase() === profile.email.toLowerCase()))?.role || 'Member'}</strong>
                     </div>
                     <button
                       onClick={() => setSelectedProject(p)}

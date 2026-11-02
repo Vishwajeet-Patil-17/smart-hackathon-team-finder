@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Clock, Plus, AlertTriangle, UserCheck, Calendar } from 'lucide-react';
 
 export const TaskBoard = ({
   tasks,
-  teamMembers,
+  teamMembers = [],
   isLeader,
   currentUserId,
   projectId,
@@ -18,9 +18,18 @@ export const TaskBoard = ({
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [assignedTo, setAssignedTo] = useState(teamMembers[0]?.userId || '');
+  const [assignedTo, setAssignedTo] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [deadline, setDeadline] = useState(new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0]);
+
+  useEffect(() => {
+    if (teamMembers && teamMembers.length > 0) {
+      const firstId = teamMembers[0].userId || teamMembers[0].id || teamMembers[0]._id;
+      if (!assignedTo || !teamMembers.some(m => String(m.userId || m.id || m._id) === String(assignedTo))) {
+        setAssignedTo(firstId || '');
+      }
+    }
+  }, [teamMembers]);
 
   const filteredTasks = (tasks || []).filter(t => {
     if (filter === 'All') return true;
@@ -29,7 +38,11 @@ export const TaskBoard = ({
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !assignedTo || !deadline) return;
+    const effectiveAssignedTo = assignedTo || (teamMembers && teamMembers[0] ? (teamMembers[0].userId || teamMembers[0].id || teamMembers[0]._id) : '');
+    if (!title.trim() || !effectiveAssignedTo || !deadline) {
+      setErrorMsg('Please specify a title, assigned teammate, and sprint deadline.');
+      return;
+    }
     setIsSubmitting(true);
     setErrorMsg('');
     try {
@@ -37,7 +50,7 @@ export const TaskBoard = ({
         projectId,
         title: title.trim(),
         description: description.trim(),
-        assignedTo,
+        assignedTo: effectiveAssignedTo,
         priority,
         deadline,
       });
@@ -116,7 +129,7 @@ export const TaskBoard = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredTasks.map(task => {
-            const isAssignedToMe = task.assignedTo === currentUserId;
+            const isAssignedToMe = Boolean(currentUserId) && (String(task.assignedTo) === String(currentUserId));
             const canUpdateStatus = isAssignedToMe || isLeader;
 
             return (
@@ -247,11 +260,14 @@ export const TaskBoard = ({
                     onChange={e => setAssignedTo(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-950 border border-slate-800 text-white rounded-lg focus:outline-hidden focus:border-indigo-500"
                   >
-                    {(teamMembers || []).map(m => (
-                      <option key={m.userId} value={m.userId} className="bg-slate-900 text-white">
-                        {m.fullName} ({m.role})
-                      </option>
-                    ))}
+                    {(teamMembers || []).map(m => {
+                      const mId = m.userId || m.id || m._id;
+                      return (
+                        <option key={mId} value={mId} className="bg-slate-900 text-white">
+                          {m.fullName || m.name} ({m.role || 'Member'})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 

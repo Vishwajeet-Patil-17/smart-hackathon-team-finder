@@ -18,8 +18,6 @@ import discussionRoutes from './server/routes/discussionRoutes.js';
 import dashboardRoutes from './server/routes/dashboardRoutes.js';
 import systemRoutes from './server/routes/systemRoutes.js';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -45,8 +43,17 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // CORS and security headers
+  const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin;
+    if (clientOrigin && clientOrigin !== '*') {
+      res.setHeader('Access-Control-Allow-Origin', origin === clientOrigin ? origin : clientOrigin);
+    } else if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', clientOrigin);
+    }
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') {
@@ -95,10 +102,7 @@ async function startServer() {
   app.use((err, req, res, next) => {
     console.error('[API Error]:', err);
     if (err.name === 'MongooseError' || err.name === 'MongoNetworkError' || (err.message && err.message.includes('buffering timed out'))) {
-      if (req.method === 'GET') {
-        return res.json(req.path.endsWith('s') || req.path.endsWith('s/') ? [] : {});
-      }
-      return res.status(503).json({ error: 'Service temporarily unavailable (database offline)' });
+      return res.status(503).json({ error: 'Service temporarily unavailable. Database connection issue.' });
     }
     if (!res.headersSent) {
       res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });

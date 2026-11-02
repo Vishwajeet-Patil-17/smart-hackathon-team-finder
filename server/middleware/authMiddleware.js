@@ -1,7 +1,11 @@
 import jwt from 'jsonwebtoken';
 
 function getJwtSecret() {
-  return process.env.JWT_SECRET || 'wce-sangli-hackathon-team-finder-jwt-secret-2026-key';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set. Server cannot start without a secure JWT secret.');
+  }
+  return secret;
 }
 
 export function generateToken(payload) {

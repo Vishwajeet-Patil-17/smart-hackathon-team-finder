@@ -131,7 +131,14 @@ router.put('/:id', authenticate, async (req, res) => {
       return;
     }
 
-    if (project.leaderId !== req.user.id) {
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const isLeader =
+      Boolean(req.user.id) && (
+        String(project.leaderId) === String(req.user.id) ||
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
+      );
+
+    if (!isLeader) {
       res.status(403).json({ error: 'Unauthorized: Only the project leader can modify project details.' });
       return;
     }

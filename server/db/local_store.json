@@ -285,15 +285,44 @@
           "academicYear": "Third Year",
           "joinedAt": "2026-10-29T06:02:13.930Z",
           "_id": "6ae2e165b4829126cc1ab883"
+        },
+        {
+          "userId": "6ae2ddbcdd541521b3a4ebc2",
+          "fullName": "Tushar Khurade",
+          "name": "Tushar Khurade",
+          "email": "tushar.kurade@walchandsangli.ac.in",
+          "role": "Frontend Developer",
+          "department": "Information Technology",
+          "academicYear": "Third Year",
+          "joinedAt": "2026-10-29T08:32:03.441Z"
         }
       ],
       "createdAt": "2026-10-29T05:22:51.291Z",
-      "updatedAt": "2026-10-29T06:02:13.939Z",
+      "updatedAt": "2026-10-29T08:32:03.441Z",
       "__v": 1,
       "id": "6ae2d82b84beda3c5178fb82"
     }
   ],
   "invitations": [
+    {
+      "projectId": "6ae2d82b84beda3c5178fb82",
+      "projectName": "smart hackathon team finder",
+      "projectDomain": "Web & Cloud Systems",
+      "candidateId": "6ae2ddbcdd541521b3a4ebc2",
+      "candidateName": "Tushar Khurade",
+      "candidateEmail": "tushar.kurade@walchandsangli.ac.in",
+      "leaderId": "6ae2d6e8114f258044052642",
+      "leaderName": "Vishwajeet Patil",
+      "leaderEmail": "vishwajeet.patil@walchandsangli.ac.in",
+      "proposedRole": "Full Stack Engineer",
+      "message": "I want to help with the database architecture!",
+      "id": "jreq_1793263518980_1mprn",
+      "_id": "jreq_1793263518980_1mprn",
+      "type": "join_request",
+      "status": "Accepted",
+      "createdAt": "2026-10-29T08:45:18.980Z",
+      "updatedAt": "2026-10-29T08:45:18.982Z"
+    },
     {
       "_id": "6ae2e166b4829126cc1ab884",
       "projectId": "6ae2d82b84beda3c5178fb82",
@@ -310,14 +339,33 @@
       "proposedRole": "Frontend Developer",
       "message": "Hello Leader, I have strong experience in React and UI/UX design. I would love to build the frontend architecture for this hackathon project!",
       "type": "join_request",
-      "status": "Pending",
+      "status": "Accepted",
       "createdAt": "2026-10-29T06:02:14.223Z",
-      "updatedAt": "2026-10-29T06:02:14.223Z",
+      "updatedAt": "2026-10-29T08:32:03.440Z",
       "__v": 0,
       "id": "6ae2e166b4829126cc1ab884"
     }
   ],
-  "tasks": [],
+  "tasks": [
+    {
+      "projectId": "6ae2d82b84beda3c5178fb82",
+      "title": "Implement GraphQL schema and resolvers",
+      "description": "Build robust resolvers for candidate search",
+      "assignedTo": "6ae2ddbcdd541521b3a4ebc2",
+      "assignedToEmail": "tushar.kurade@walchandsangli.ac.in",
+      "assignedToName": "Tushar Khurade",
+      "createdBy": "6ae2d6e8114f258044052642",
+      "priority": "High",
+      "deadline": "2026-11-05T08:45:18.984Z",
+      "id": "tsk_1793263518984_8a2cb",
+      "_id": "tsk_1793263518984_8a2cb",
+      "status": "Completed",
+      "isOverdue": false,
+      "createdAt": "2026-10-29T08:45:18.984Z",
+      "updatedAt": "2026-10-29T08:45:18.985Z",
+      "completedAt": "2026-10-29T08:45:18.985Z"
+    }
+  ],
   "leaderEvals": [],
   "peerEvals": [],
   "messages": []

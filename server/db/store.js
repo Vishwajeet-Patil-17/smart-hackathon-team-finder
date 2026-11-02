@@ -41,14 +41,14 @@ function loadLocalStore() {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
       const data = JSON.parse(raw);
-      if (Array.isArray(data.users)) memoryUsers = data.users;
-      if (Array.isArray(data.projects)) memoryProjects = data.projects;
-      if (Array.isArray(data.invitations)) memoryInvitations = data.invitations;
-      if (Array.isArray(data.tasks)) memoryTasks = data.tasks;
-      if (Array.isArray(data.leaderEvals)) memoryLeaderEvals = data.leaderEvals;
-      if (Array.isArray(data.peerEvals)) memoryPeerEvals = data.peerEvals;
-      if (Array.isArray(data.messages)) memoryMessages = data.messages;
-      console.log(`[Store] Local cache initialized with ${memoryUsers.length} users, ${memoryProjects.length} projects.`);
+      if (Array.isArray(data.users)) memoryUsers = data.users.map(docToObj);
+      if (Array.isArray(data.projects)) memoryProjects = data.projects.map(docToObj);
+      if (Array.isArray(data.invitations)) memoryInvitations = data.invitations.map(docToObj);
+      if (Array.isArray(data.tasks)) memoryTasks = data.tasks.map(docToObj);
+      if (Array.isArray(data.leaderEvals)) memoryLeaderEvals = data.leaderEvals.map(docToObj);
+      if (Array.isArray(data.peerEvals)) memoryPeerEvals = data.peerEvals.map(docToObj);
+      if (Array.isArray(data.messages)) memoryMessages = data.messages.map(docToObj);
+      console.log(`[Store] Local cache initialized with ${memoryUsers.length} users, ${memoryProjects.length} projects, ${memoryInvitations.length} invitations, ${memoryTasks.length} tasks.`);
     }
   } catch (e) {
     console.warn('[Store] Local store load warning:', e.message);
@@ -58,13 +58,13 @@ function loadLocalStore() {
 export function saveLocalStore() {
   try {
     const data = {
-      users: memoryUsers,
-      projects: memoryProjects,
-      invitations: memoryInvitations,
-      tasks: memoryTasks,
-      leaderEvals: memoryLeaderEvals,
-      peerEvals: memoryPeerEvals,
-      messages: memoryMessages,
+      users: memoryUsers.map(docToObj),
+      projects: memoryProjects.map(docToObj),
+      invitations: memoryInvitations.map(docToObj),
+      tasks: memoryTasks.map(docToObj),
+      leaderEvals: memoryLeaderEvals.map(docToObj),
+      peerEvals: memoryPeerEvals.map(docToObj),
+      messages: memoryMessages.map(docToObj),
     };
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (e) {
@@ -461,16 +461,29 @@ export const dbStore = {
     const project = await this.findProjectById(projectId);
     if (!project) return null;
 
-    const exists = project.teamMembers.some(m => String(m.userId) === String(member.userId));
+    const memberUserId = String(member.userId || member.id || member._id || '').trim();
+    const memberEmail = (member.email || '').toLowerCase().trim();
+
+    const exists = (project.teamMembers || []).some(m =>
+      (memberUserId && (String(m.userId) === memberUserId || String(m.id) === memberUserId || String(m._id) === memberUserId)) ||
+      (memberEmail && m.email && m.email.toLowerCase().trim() === memberEmail)
+    );
     if (!exists) {
       const fullName = member.fullName || member.name || 'Team Member';
       const updatedMembers = [
-        ...project.teamMembers,
+        ...(project.teamMembers || []),
         {
           ...member,
+          userId: memberUserId,
+          id: memberUserId,
+          _id: memberUserId,
           fullName,
           name: member.name || fullName,
-          joinedAt: new Date().toISOString(),
+          email: member.email || '',
+          role: member.role || 'Member',
+          department: member.department || '',
+          academicYear: member.academicYear || '',
+          joinedAt: member.joinedAt || new Date().toISOString(),
         },
       ];
       return await this.updateProject(projectId, { teamMembers: updatedMembers });
@@ -479,26 +492,37 @@ export const dbStore = {
   },
 
   // INVITATIONS & JOIN REQUESTS
-  async getInvitationsByCandidate(candidateId) {
+  async getInvitationsByCandidate(candidateId, candidateEmail = '') {
     await initStore();
-    const cIdStr = String(candidateId);
+    const cIdStr = candidateId ? String(candidateId).trim() : '';
+    const emailNorm = (candidateEmail || '').toLowerCase().trim();
     if (mongoose.connection.readyState === 1) {
       try {
-        const docs = await InvitationModel.find({
-          candidateId: cIdStr,
-          $or: [{ type: 'invitation' }, { type: { $exists: false } }],
-        }).sort({ createdAt: -1 }).lean();
-        if (docs && docs.length > 0) return docs.map(docToObj);
+        const orClauses = [];
+        if (cIdStr) orClauses.push({ candidateId: cIdStr });
+        if (emailNorm) orClauses.push({ candidateEmail: emailNorm });
+        if (orClauses.length > 0) {
+          const docs = await InvitationModel.find({
+            $or: orClauses,
+            $and: [{ $or: [{ type: 'invitation' }, { type: { $exists: false } }] }],
+          }).sort({ createdAt: -1 }).lean();
+          if (docs && docs.length > 0) return docs.map(docToObj);
+        }
       } catch (e) {
         // fallback
       }
     }
-    return memoryInvitations.filter(i => String(i.candidateId) === cIdStr && (!i.type || i.type === 'invitation'));
+    return memoryInvitations.filter(i =>
+      (!i.type || i.type === 'invitation') &&
+      ((cIdStr && (String(i.candidateId) === cIdStr || String(i.candidateId?._id) === cIdStr)) ||
+       (emailNorm && i.candidateEmail && i.candidateEmail.toLowerCase().trim() === emailNorm))
+    ).map(docToObj);
   },
 
   async getInvitationsByProject(projectId) {
     await initStore();
-    const pIdStr = String(projectId);
+    if (!projectId) return [];
+    const pIdStr = String(projectId).trim();
     if (mongoose.connection.readyState === 1) {
       try {
         const docs = await InvitationModel.find({
@@ -510,12 +534,15 @@ export const dbStore = {
         // fallback
       }
     }
-    return memoryInvitations.filter(i => String(i.projectId) === pIdStr && (!i.type || i.type === 'invitation'));
+    return memoryInvitations.filter(i =>
+      String(i.projectId) === pIdStr && (!i.type || i.type === 'invitation')
+    ).map(docToObj);
   },
 
   async getJoinRequestsByProject(projectId) {
     await initStore();
-    const pIdStr = String(projectId);
+    if (!projectId) return [];
+    const pIdStr = String(projectId).trim();
     if (mongoose.connection.readyState === 1) {
       try {
         const orClauses = [{ projectId: pIdStr }];
@@ -531,53 +558,72 @@ export const dbStore = {
         // fallback
       }
     }
-    return memoryInvitations.filter(i => (String(i.projectId) === pIdStr || i.projectId?.toString() === pIdStr) && i.type === 'join_request');
+    return memoryInvitations.filter(i =>
+      (String(i.projectId) === pIdStr || i.projectId?.toString() === pIdStr) &&
+      i.type === 'join_request'
+    ).map(docToObj);
   },
 
   async getJoinRequestsForLeader(leaderId, leaderEmail) {
     await initStore();
-    const lIdStr = String(leaderId);
-    const lEmailNorm = (leaderEmail || '').toLowerCase();
+    const lIdStr = leaderId ? String(leaderId).trim() : '';
+    const lEmailNorm = (leaderEmail || '').toLowerCase().trim();
     if (mongoose.connection.readyState === 1) {
       try {
-        const docs = await InvitationModel.find({
-          type: 'join_request',
-          $or: [
-            { leaderId: lIdStr },
-            { leaderEmail: lEmailNorm },
-          ],
-        }).sort({ createdAt: -1 }).lean();
-        if (docs && docs.length > 0) return docs.map(docToObj);
+        const orClauses = [];
+        if (lIdStr) orClauses.push({ leaderId: lIdStr });
+        if (lEmailNorm) orClauses.push({ leaderEmail: lEmailNorm });
+        if (orClauses.length > 0) {
+          const docs = await InvitationModel.find({
+            type: 'join_request',
+            $or: orClauses,
+          }).sort({ createdAt: -1 }).lean();
+          if (docs && docs.length > 0) return docs.map(docToObj);
+        }
       } catch (e) {
         // fallback
       }
     }
     return memoryInvitations.filter(
       i => i.type === 'join_request' &&
-      (String(i.leaderId) === lIdStr || (i.leaderEmail && i.leaderEmail.toLowerCase() === lEmailNorm))
-    );
+      ((lIdStr && (String(i.leaderId) === lIdStr || String(i.leaderId?._id) === lIdStr)) ||
+       (lEmailNorm && i.leaderEmail && i.leaderEmail.toLowerCase().trim() === lEmailNorm))
+    ).map(docToObj);
   },
 
-  async getJoinRequestsByCandidate(candidateId) {
+  async getJoinRequestsByCandidate(candidateId, candidateEmail = '') {
     await initStore();
-    const cIdStr = String(candidateId);
+    const cIdStr = candidateId ? String(candidateId).trim() : '';
+    const emailNorm = (candidateEmail || '').toLowerCase().trim();
     if (mongoose.connection.readyState === 1) {
       try {
-        const docs = await InvitationModel.find({
-          candidateId: cIdStr,
-          type: 'join_request',
-        }).sort({ createdAt: -1 }).lean();
-        if (docs && docs.length > 0) return docs.map(docToObj);
+        const orClauses = [];
+        if (cIdStr) orClauses.push({ candidateId: cIdStr });
+        if (emailNorm) orClauses.push({ candidateEmail: emailNorm });
+        if (orClauses.length > 0) {
+          const docs = await InvitationModel.find({
+            $or: orClauses,
+            type: 'join_request',
+          }).sort({ createdAt: -1 }).lean();
+          if (docs && docs.length > 0) return docs.map(docToObj);
+        }
       } catch (e) {
         // fallback
       }
     }
-    return memoryInvitations.filter(i => String(i.candidateId) === cIdStr && i.type === 'join_request');
+    return memoryInvitations.filter(i =>
+      i.type === 'join_request' &&
+      ((cIdStr && (String(i.candidateId) === cIdStr || String(i.candidateId?._id) === cIdStr)) ||
+       (emailNorm && i.candidateEmail && i.candidateEmail.toLowerCase().trim() === emailNorm))
+    ).map(docToObj);
   },
 
   async findInvitationById(id) {
     await initStore();
-    const idStr = String(id);
+    if (!id) return null;
+    const idStr = String(id).trim();
+    if (!idStr || idStr === 'undefined') return null;
+
     if (mongoose.connection.readyState === 1) {
       try {
         let doc = null;
@@ -592,17 +638,19 @@ export const dbStore = {
         // fallback
       }
     }
-    return memoryInvitations.find(i => String(i.id) === idStr || i._id?.toString() === idStr) || null;
+    const found = memoryInvitations.find(i => String(i.id) === idStr || String(i._id) === idStr);
+    return found ? docToObj(found) : null;
   },
 
   async createInvitation(invData) {
     await initStore();
+    const now = new Date().toISOString();
     let inv = {
       ...invData,
       type: invData.type || 'invitation',
       status: 'Pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     if (mongoose.connection.readyState === 1) {
@@ -611,10 +659,15 @@ export const dbStore = {
         inv = docToObj(created);
         console.log(`[Store] Created invitation in MongoDB Atlas (ID: ${inv.id})`);
       } catch (e) {
-        inv.id = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        console.warn('[Store] createInvitation MongoDB fallback:', e.message);
+        const genId = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        inv.id = genId;
+        inv._id = genId;
       }
     } else {
-      inv.id = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      const genId = 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      inv.id = genId;
+      inv._id = genId;
     }
 
     memoryInvitations.unshift(inv);
@@ -624,12 +677,13 @@ export const dbStore = {
 
   async createJoinRequest(reqData) {
     await initStore();
+    const now = new Date().toISOString();
     let joinReq = {
       ...reqData,
       type: 'join_request',
       status: 'Pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     if (mongoose.connection.readyState === 1) {
@@ -638,10 +692,15 @@ export const dbStore = {
         joinReq = docToObj(created);
         console.log(`[Store] Created join request in MongoDB Atlas (ID: ${joinReq.id})`);
       } catch (e) {
-        joinReq.id = 'jreq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        console.warn('[Store] createJoinRequest MongoDB fallback:', e.message);
+        const genId = 'jreq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        joinReq.id = genId;
+        joinReq._id = genId;
       }
     } else {
-      joinReq.id = 'jreq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      const genId = 'jreq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      joinReq.id = genId;
+      joinReq._id = genId;
     }
 
     memoryInvitations.unshift(joinReq);
@@ -651,7 +710,10 @@ export const dbStore = {
 
   async updateInvitation(id, updates) {
     await initStore();
-    const idStr = String(id);
+    if (!id) return null;
+    const idStr = String(id).trim();
+    if (!idStr || idStr === 'undefined') return null;
+
     let updatedInv = null;
 
     if (mongoose.connection.readyState === 1) {
@@ -669,24 +731,26 @@ export const dbStore = {
       }
     }
 
-    const idx = memoryInvitations.findIndex(i => String(i.id) === idStr || i._id?.toString() === idStr);
+    const idx = memoryInvitations.findIndex(i => String(i.id) === idStr || String(i._id) === idStr);
     if (idx !== -1) {
       memoryInvitations[idx] = {
         ...memoryInvitations[idx],
         ...updates,
+        status: updates.status || memoryInvitations[idx].status,
         updatedAt: new Date().toISOString(),
       };
       if (!updatedInv) updatedInv = memoryInvitations[idx];
       saveLocalStore();
     }
 
-    return updatedInv || this.findInvitationById(id);
+    return updatedInv ? docToObj(updatedInv) : this.findInvitationById(id);
   },
 
   // TASKS
   async getTasksByProject(projectId) {
     await initStore();
-    const pIdStr = String(projectId);
+    if (!projectId) return [];
+    const pIdStr = String(projectId).trim();
     if (mongoose.connection.readyState === 1) {
       try {
         const docs = await TaskModel.find({ projectId: pIdStr }).sort({ deadline: 1 }).lean();
@@ -695,26 +759,40 @@ export const dbStore = {
         // fallback
       }
     }
-    return memoryTasks.filter(t => String(t.projectId) === pIdStr);
+    return memoryTasks.filter(t => String(t.projectId) === pIdStr).map(docToObj);
   },
 
-  async getTasksByMember(userId) {
+  async getTasksByMember(userId, userEmail = '') {
     await initStore();
-    const uIdStr = String(userId);
+    if (!userId && !userEmail) return [];
+    const uIdStr = userId ? String(userId).trim() : '';
+    const emailNorm = (userEmail || '').toLowerCase().trim();
+
     if (mongoose.connection.readyState === 1) {
       try {
-        const docs = await TaskModel.find({ assignedTo: uIdStr }).sort({ deadline: 1 }).lean();
-        if (docs && docs.length > 0) return docs.map(docToObj);
+        const orClauses = [];
+        if (uIdStr) orClauses.push({ assignedTo: uIdStr });
+        if (emailNorm) orClauses.push({ assignedToEmail: emailNorm });
+        if (orClauses.length > 0) {
+          const docs = await TaskModel.find({ $or: orClauses }).sort({ deadline: 1 }).lean();
+          if (docs && docs.length > 0) return docs.map(docToObj);
+        }
       } catch (e) {
         // fallback
       }
     }
-    return memoryTasks.filter(t => String(t.assignedTo) === uIdStr);
+    return memoryTasks.filter(t =>
+      (uIdStr && (String(t.assignedTo) === uIdStr || String(t.assignedToId) === uIdStr)) ||
+      (emailNorm && t.assignedToEmail && t.assignedToEmail.toLowerCase().trim() === emailNorm)
+    ).map(docToObj);
   },
 
   async findTaskById(id) {
     await initStore();
-    const idStr = String(id);
+    if (!id) return null;
+    const idStr = String(id).trim();
+    if (!idStr || idStr === 'undefined') return null;
+
     if (mongoose.connection.readyState === 1) {
       try {
         let doc = null;
@@ -729,7 +807,8 @@ export const dbStore = {
         // fallback
       }
     }
-    return memoryTasks.find(t => String(t.id) === idStr || t._id?.toString() === idStr) || null;
+    const found = memoryTasks.find(t => String(t.id) === idStr || String(t._id) === idStr);
+    return found ? docToObj(found) : null;
   },
 
   async createTask(taskData) {
@@ -750,16 +829,22 @@ export const dbStore = {
         task = docToObj(created);
         console.log(`[Store] Created task in MongoDB Atlas: ${task.title} (ID: ${task.id})`);
       } catch (e) {
-        task.id = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        console.warn('[Store] createTask MongoDB fallback:', e.message);
+        const genId = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        task.id = genId;
+        task._id = genId;
       }
     } else {
-      task.id = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      const genId = 'tsk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      task.id = genId;
+      task._id = genId;
     }
 
     memoryTasks.push(task);
     saveLocalStore();
     return task;
   },
+
 
   async updateTask(id, updates) {
     await initStore();

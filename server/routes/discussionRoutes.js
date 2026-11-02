@@ -14,7 +14,7 @@ router.get('/:projectId', authenticate, async (req, res) => {
     }
 
     const userId = req.user.id;
-    const isMember = project.teamMembers?.some(m => m.userId === userId) || project.leaderId === userId;
+    const isMember = project.teamMembers?.some(m => String(m.userId) === String(userId)) || String(project.leaderId) === String(userId);
     if (!isMember) {
       res.status(403).json({ error: 'Unauthorized: Only team members can access project discussions.' });
       return;
@@ -45,8 +45,8 @@ router.post('/:projectId', authenticate, async (req, res) => {
 
     const userId = req.user.id;
     const user = await dbStore.findUserById(userId);
-    const memberObj = project.teamMembers?.find(m => m.userId === userId);
-    const isLeader = project.leaderId === userId;
+    const memberObj = project.teamMembers?.find(m => String(m.userId) === String(userId));
+    const isLeader = String(project.leaderId) === String(userId);
 
     if (!memberObj && !isLeader) {
       res.status(403).json({ error: 'Unauthorized: Only team members can post to project discussions.' });

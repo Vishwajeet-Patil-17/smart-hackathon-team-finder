@@ -20,26 +20,53 @@ router.post('/', authenticate, async (req, res) => {
       return;
     }
 
-    if (project.leaderId !== leaderId) {
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const isLeader =
+      Boolean(leaderId) && (
+        String(project.leaderId) === String(leaderId) ||
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
+      );
+
+    if (!isLeader) {
       res.status(403).json({ error: 'Unauthorized: Only the project leader can create and assign tasks.' });
       return;
     }
 
-    const isMember = project.teamMembers?.some(m => m.userId === assignedTo);
+    const assignedStr = String(assignedTo).trim();
+    let assignedUser = await dbStore.findUserById(assignedStr);
+    if (!assignedUser) {
+      const matchedMember = project.teamMembers?.find(m =>
+        String(m.userId) === assignedStr || String(m.id) === assignedStr || String(m._id) === assignedStr ||
+        (m.email && m.email.toLowerCase() === assignedStr.toLowerCase())
+      );
+      if (matchedMember) {
+        assignedUser = await dbStore.findUserById(matchedMember.userId) || await dbStore.findUserByEmail(matchedMember.email);
+      }
+    }
+
+    const isMember = (project.teamMembers || []).some(m =>
+      String(m.userId) === assignedStr ||
+      String(m.id) === assignedStr ||
+      String(m._id) === assignedStr ||
+      (assignedUser && (String(m.userId) === String(assignedUser.id) || (m.email && assignedUser.email && m.email.toLowerCase() === assignedUser.email.toLowerCase())))
+    );
+
     if (!isMember) {
       res.status(400).json({ error: 'Assigned student must be a registered member of this project team.' });
       return;
     }
 
-    const assignedUser = await dbStore.findUserById(assignedTo);
+    const targetUserId = String(assignedUser ? (assignedUser.id || assignedUser._id || assignedStr) : assignedStr);
+    const targetUserEmail = (assignedUser?.email || '').toLowerCase().trim();
 
     const task = await dbStore.createTask({
-      projectId,
+      projectId: String(project.id || project._id || projectId),
       title: title.trim(),
       description: description ? description.trim() : '',
-      assignedTo,
-      assignedToName: assignedUser ? assignedUser.fullName : 'Team Member',
-      createdBy: leaderId,
+      assignedTo: targetUserId,
+      assignedToEmail: targetUserEmail,
+      assignedToName: assignedUser ? assignedUser.fullName : (project.teamMembers?.find(m => String(m.userId) === targetUserId)?.fullName || 'Team Member'),
+      createdBy: String(leaderId),
       priority: priority || 'Medium',
       deadline: new Date(deadline).toISOString(),
     });
@@ -62,13 +89,20 @@ router.get('/project/:projectId', authenticate, async (req, res) => {
     }
 
     const userId = req.user.id;
-    const isMember = project.teamMembers?.some(m => m.userId === userId) || project.leaderId === userId;
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const isMember =
+      project.teamMembers?.some(m =>
+        String(m.userId) === String(userId) || (m.email && m.email.toLowerCase() === userEmail)
+      ) ||
+      String(project.leaderId) === String(userId) ||
+      (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail);
+
     if (!isMember) {
       res.status(403).json({ error: 'Unauthorized: You must be a project member to view tasks.' });
       return;
     }
 
-    const tasks = await dbStore.getTasksByProject(project.id);
+    const tasks = await dbStore.getTasksByProject(project.id || project._id);
     res.status(200).json({ tasks });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -77,7 +111,7 @@ router.get('/project/:projectId', authenticate, async (req, res) => {
 
 router.get('/my', authenticate, async (req, res) => {
   try {
-    const tasks = await dbStore.getTasksByMember(req.user.id);
+    const tasks = await dbStore.getTasksByMember(req.user.id, req.user.email);
     res.status(200).json({ tasks });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -100,13 +134,21 @@ router.put('/:id/status', authenticate, async (req, res) => {
 
     const project = await dbStore.findProjectById(task.projectId);
     const userId = req.user.id;
+    const userEmail = (req.user.email || '').toLowerCase().trim();
 
-    if (task.assignedTo !== userId && project?.leaderId !== userId) {
+    const isAssigned =
+      String(task.assignedTo) === String(userId) ||
+      (task.assignedToEmail && task.assignedToEmail.toLowerCase() === userEmail);
+    const isLeader =
+      String(project?.leaderId) === String(userId) ||
+      (project?.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail);
+
+    if (!isAssigned && !isLeader) {
       res.status(403).json({ error: 'Unauthorized to update this task.' });
       return;
     }
 
-    const updated = await dbStore.updateTask(task.id, { status });
+    const updated = await dbStore.updateTask(task.id || task._id || req.params.id, { status });
     res.status(200).json({
       message: 'Task status updated.',
       task: updated,
@@ -125,7 +167,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const project = await dbStore.findProjectById(task.projectId);
-    if (project?.leaderId !== req.user.id) {
+    if (String(project?.leaderId) !== String(req.user.id)) {
       res.status(403).json({ error: 'Unauthorized: Only the project leader can edit task details.' });
       return;
     }
@@ -138,15 +180,15 @@ router.put('/:id', authenticate, async (req, res) => {
     if (deadline) updates.deadline = new Date(deadline).toISOString();
     if (status) updates.status = status;
 
-    if (assignedTo && assignedTo !== task.assignedTo) {
+    if (assignedTo && String(assignedTo) !== String(task.assignedTo)) {
       const assignedUser = await dbStore.findUserById(assignedTo);
       if (assignedUser) {
-        updates.assignedTo = assignedTo;
+        updates.assignedTo = String(assignedTo);
         updates.assignedToName = assignedUser.fullName;
       }
     }
 
-    const updated = await dbStore.updateTask(task.id, updates);
+    const updated = await dbStore.updateTask(task.id || task._id || req.params.id, updates);
     res.status(200).json({
       message: 'Task updated.',
       task: updated,

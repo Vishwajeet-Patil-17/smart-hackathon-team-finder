@@ -1,11 +1,7 @@
-import dotenv from 'dotenv';
-dotenv.config({ override: true });
 import mongoose from 'mongoose';
 
 let isConnected = false;
 let connectionMode = 'memory-store';
-
-const ATLAS_FALLBACK_URI = 'mongodb+srv://hackteam:Hackteam%40123@cluster0.9dvxfih.mongodb.net/hackathon-team-finder?retryWrites=true&w=majority';
 
 export async function connectDB() {
   mongoose.set('bufferCommands', false);

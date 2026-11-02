@@ -119,15 +119,8 @@ router.post('/register', upload.single('idCardPhoto'), async (req, res) => {
     }
 
     if (!idCard) {
-      idCard = {
-        assetId: `id_card_wce_${Date.now()}`,
-        resourceType: 'image',
-        format: 'png',
-        secureUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80',
-        uploadedAt: new Date().toISOString(),
-        isRestricted: false,
-        storageProvider: 'secure-local-vault',
-      };
+      res.status(400).json({ error: 'Student ID card photo is required for registration. Please upload your college ID card.' });
+      return;
     }
 
     let parsedSkills = [];

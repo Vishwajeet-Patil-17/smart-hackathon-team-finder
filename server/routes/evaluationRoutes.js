@@ -27,12 +27,17 @@ router.post('/leader', authenticate, async (req, res) => {
       return;
     }
 
-    if (project.leaderId !== leaderId) {
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const isLeader =
+      String(project.leaderId) === String(leaderId) ||
+      (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail);
+
+    if (!isLeader) {
       res.status(403).json({ error: 'Unauthorized: Only the project leader can submit leader evaluations.' });
       return;
     }
 
-    if (memberId === leaderId) {
+    if (String(memberId) === String(leaderId)) {
       res.status(400).json({ error: 'Project leaders cannot evaluate themselves via the leader evaluation form.' });
       return;
     }
@@ -75,7 +80,7 @@ router.post('/peer', authenticate, async (req, res) => {
       return;
     }
 
-    if (evaluatorId === evaluatedMemberId) {
+    if (String(evaluatorId) === String(evaluatedMemberId)) {
       res.status(400).json({ error: 'Self-evaluation is strictly prohibited. You can only evaluate peers.' });
       return;
     }
@@ -87,9 +92,9 @@ router.post('/peer', authenticate, async (req, res) => {
     }
 
     const isEvaluatorMember =
-      project.teamMembers?.some(m => m.userId === evaluatorId) || project.leaderId === evaluatorId;
+      project.teamMembers?.some(m => String(m.userId) === String(evaluatorId)) || String(project.leaderId) === String(evaluatorId);
     const isEvaluatedMember =
-      project.teamMembers?.some(m => m.userId === evaluatedMemberId) || project.leaderId === evaluatedMemberId;
+      project.teamMembers?.some(m => String(m.userId) === String(evaluatedMemberId)) || String(project.leaderId) === String(evaluatedMemberId);
 
     if (!isEvaluatorMember || !isEvaluatedMember) {
       res.status(403).json({ error: 'Both evaluator and evaluated student must be active members of this project.' });
@@ -138,9 +143,9 @@ router.get('/project/:projectId/reliability/:memberId', authenticate, async (req
 
     const requesterId = req.user.id;
     const isAuthorized =
-      project.leaderId === requesterId ||
-      memberId === requesterId ||
-      project.teamMembers?.some(m => m.userId === requesterId);
+      String(project.leaderId) === String(requesterId) ||
+      String(memberId) === String(requesterId) ||
+      project.teamMembers?.some(m => String(m.userId) === String(requesterId));
 
     if (!isAuthorized) {
       res.status(403).json({ error: 'Unauthorized to access this reliability information.' });

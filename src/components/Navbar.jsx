@@ -1,12 +1,13 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { LogOut } from 'lucide-react';
+import { LogOut, Shield } from 'lucide-react';
 
 export const Navbar = ({
   currentTab,
   onSelectTab,
   onOpenProfile,
   onOpenAuth,
+  isTeamLeader = false,
 }) => {
   const { user, logout } = useAuth();
 
@@ -41,16 +42,19 @@ export const Navbar = ({
             Student Dashboard
           </button>
 
-          <button
-            onClick={() => onSelectTab('leader')}
-            className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-              currentTab === 'leader'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Team Leader Dashboard
-          </button>
+          {isTeamLeader && (
+            <button
+              onClick={() => onSelectTab('leader')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                currentTab === 'leader'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Team Leader Dashboard</span>
+            </button>
+          )}
 
           <button
             onClick={() => onSelectTab('projects')}
@@ -117,12 +121,15 @@ export const Navbar = ({
         >
           Student Dashboard
         </button>
-        <button
-          onClick={() => onSelectTab('leader')}
-          className={`flex-1 py-2.5 text-center ${currentTab === 'leader' ? 'text-indigo-400 font-bold bg-slate-950' : 'text-slate-400'}`}
-        >
-          Leader Dashboard
-        </button>
+        {isTeamLeader && (
+          <button
+            onClick={() => onSelectTab('leader')}
+            className={`flex-1 py-2.5 text-center flex items-center justify-center gap-1 ${currentTab === 'leader' ? 'text-indigo-400 font-bold bg-slate-950' : 'text-slate-400'}`}
+          >
+            <Shield className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Leader</span>
+          </button>
+        )}
         <button
           onClick={() => onSelectTab('projects')}
           className={`flex-1 py-2.5 text-center ${currentTab === 'projects' ? 'text-indigo-400 font-bold bg-slate-950' : 'text-slate-400'}`}

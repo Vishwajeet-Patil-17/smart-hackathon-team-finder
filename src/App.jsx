@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { api } from './services/api.js';
 import { Navbar } from './components/Navbar.jsx';
 import { Footer } from './components/Footer.jsx';
 import { StudentDashboard } from './components/StudentDashboard.jsx';
@@ -13,12 +14,41 @@ function MainAppContent() {
   const { user, isLoading: authLoading, refreshProfile } = useAuth();
   const [currentTab, setCurrentTab] = useState('student');
   const [leaderProjectId, setLeaderProjectId] = useState('');
+  const [isTeamLeader, setIsTeamLeader] = useState(false);
 
   // Modal triggers
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkLeaderStatus = async () => {
+      if (!user) {
+        if (isMounted) setIsTeamLeader(false);
+        return;
+      }
+      try {
+        const res = await api.getProjects();
+        const allProjects = res.projects || [];
+        const userEmail = (user.email || '').toLowerCase().trim();
+        const userId = user.id ? String(user.id) : '';
+        const leads = allProjects.some(
+          p => (userId && String(p.leaderId) === userId) ||
+               (p.leaderEmail && userEmail && p.leaderEmail.toLowerCase().trim() === userEmail)
+        );
+        if (isMounted) setIsTeamLeader(leads);
+      } catch {
+        if (isMounted) setIsTeamLeader(false);
+      }
+    };
+
+    checkLeaderStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const handleOpenAuth = (mode = 'login') => {
     setAuthMode(mode);
@@ -27,6 +57,7 @@ function MainAppContent() {
 
   const handleNavigateToLeader = (projectId) => {
     setLeaderProjectId(projectId);
+    setIsTeamLeader(true);
     setCurrentTab('leader');
   };
 
@@ -48,6 +79,7 @@ function MainAppContent() {
         onSelectTab={setCurrentTab}
         onOpenProfile={() => setShowProfileModal(true)}
         onOpenAuth={handleOpenAuth}
+        isTeamLeader={isTeamLeader}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -64,6 +96,7 @@ function MainAppContent() {
             initialProjectId={leaderProjectId}
             onOpenCreateProject={() => setShowCreateProjectModal(true)}
             onOpenAuth={handleOpenAuth}
+            onNavigateToStudent={() => setCurrentTab('student')}
           />
         )}
 
@@ -104,6 +137,7 @@ function MainAppContent() {
           onClose={() => setShowCreateProjectModal(false)}
           onProjectCreated={proj => {
             setLeaderProjectId(proj.id);
+            setIsTeamLeader(true);
             setCurrentTab('leader');
           }}
         />

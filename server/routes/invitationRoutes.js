@@ -20,13 +20,11 @@ router.post('/', authenticate, async (req, res) => {
       return;
     }
 
+    const userEmail = (req.user.email || '').toLowerCase().trim();
     const isLeader =
       Boolean(leaderId) && (
-        project.leaderId === leaderId ||
         String(project.leaderId) === String(leaderId) ||
-        (project.leaderEmail && req.user.email && project.leaderEmail.toLowerCase() === req.user.email.toLowerCase()) ||
-        (project.teamMembers && project.teamMembers.some(m => String(m.userId) === String(leaderId) || (m.email && req.user.email && m.email.toLowerCase() === req.user.email.toLowerCase()))) ||
-        true
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
       );
 
     if (!isLeader) {
@@ -40,14 +38,14 @@ router.post('/', authenticate, async (req, res) => {
       return;
     }
 
-    const alreadyMember = project.teamMembers?.some(m => m.userId === candidateId);
+    const alreadyMember = project.teamMembers?.some(m => String(m.userId) === String(candidateId));
     if (alreadyMember) {
       res.status(400).json({ error: 'Candidate is already a member of this project team.' });
       return;
     }
 
     const existingInvs = await dbStore.getInvitationsByProject(projectId);
-    const hasPending = existingInvs.some(i => i.candidateId === candidateId && i.status === 'Pending');
+    const hasPending = existingInvs.some(i => String(i.candidateId) === String(candidateId) && i.status === 'Pending');
     if (hasPending) {
       res.status(400).json({ error: 'An active pending invitation is already awaiting response from this candidate.' });
       return;
@@ -101,7 +99,14 @@ router.get('/project/:projectId', authenticate, async (req, res) => {
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
-    if (project.leaderId !== req.user.id) {
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const isLeader =
+      Boolean(req.user) && (
+        String(project.leaderId) === String(req.user.id) ||
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
+      );
+
+    if (!isLeader) {
       res.status(403).json({ error: 'Unauthorized: Only project leader can view project invitations.' });
       return;
     }
@@ -121,7 +126,7 @@ router.post('/:id/accept', authenticate, async (req, res) => {
       return;
     }
 
-    if (invitation.candidateId !== req.user.id) {
+    if (String(invitation.candidateId) !== String(req.user.id)) {
       res.status(403).json({ error: 'Unauthorized: You can only respond to your own invitations.' });
       return;
     }
@@ -144,19 +149,23 @@ router.post('/:id/accept', authenticate, async (req, res) => {
     }
 
     const user = await dbStore.findUserById(req.user.id);
+    const invId = invitation.id || invitation._id || req.params.id;
+    await dbStore.updateInvitation(invId, { status: 'Accepted' });
 
-    await dbStore.updateInvitation(invitation.id, { status: 'Accepted' });
-
-    await dbStore.addTeamMember(project.id, {
-      userId: user.id,
+    const candidateUserId = String(user?.id || user?._id || req.user.id);
+    await dbStore.addTeamMember(project.id || project._id, {
+      userId: candidateUserId,
+      id: candidateUserId,
+      _id: candidateUserId,
       fullName: user.fullName,
+      name: user.fullName,
       email: user.email,
-      role: invitation.proposedRole,
+      role: invitation.proposedRole || 'Member',
       department: user.department,
       academicYear: user.academicYear,
     });
 
-    const updatedProject = await dbStore.findProjectById(project.id);
+    const updatedProject = await dbStore.findProjectById(project.id || project._id);
 
     res.status(200).json({
       message: 'Invitation accepted! You have joined the team.',
@@ -184,12 +193,12 @@ router.post('/join-request', authenticate, async (req, res) => {
       return;
     }
 
-    if (project.leaderId === candidateId) {
+    if (String(project.leaderId) === String(candidateId)) {
       res.status(400).json({ error: 'You are the leader of this project.' });
       return;
     }
 
-    const alreadyMember = project.teamMembers?.some(m => m.userId === candidateId);
+    const alreadyMember = project.teamMembers?.some(m => String(m.userId) === String(candidateId));
     if (alreadyMember) {
       res.status(400).json({ error: 'You are already a member of this project team.' });
       return;
@@ -202,7 +211,7 @@ router.post('/join-request', authenticate, async (req, res) => {
     }
 
     const existingRequests = await dbStore.getJoinRequestsByProject(projectId);
-    const hasPending = existingRequests.some(r => r.candidateId === candidateId && r.status === 'Pending');
+    const hasPending = existingRequests.some(r => String(r.candidateId) === String(candidateId) && r.status === 'Pending');
     if (hasPending) {
       res.status(400).json({ error: 'You already have a pending join request for this project awaiting leader approval.' });
       return;
@@ -260,12 +269,11 @@ router.get('/join-requests/project/:projectId', authenticate, async (req, res) =
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
+    const userEmail = (req.user.email || '').toLowerCase().trim();
     const isLeader =
       Boolean(req.user) && (
-        project.leaderId === req.user.id ||
         String(project.leaderId) === String(req.user.id) ||
-        (project.leaderEmail && req.user.email && project.leaderEmail.toLowerCase() === req.user.email.toLowerCase()) ||
-        true
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
       );
 
     if (!isLeader) {
@@ -295,15 +303,13 @@ router.post('/:id/approve', authenticate, async (req, res) => {
       return;
     }
 
+    const userEmail = (req.user.email || '').toLowerCase().trim();
     const isLeader =
       Boolean(req.user) && (
-        request.leaderId === req.user.id ||
-        String(request.leaderId) === String(req.user.id) ||
-        (request.leaderEmail && req.user.email && request.leaderEmail.toLowerCase() === req.user.email.toLowerCase()) ||
-        project.leaderId === req.user.id ||
         String(project.leaderId) === String(req.user.id) ||
-        (project.leaderEmail && req.user.email && project.leaderEmail.toLowerCase() === req.user.email.toLowerCase()) ||
-        true
+        String(request.leaderId) === String(req.user.id) ||
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail) ||
+        (request.leaderEmail && request.leaderEmail.toLowerCase().trim() === userEmail)
       );
 
     if (!isLeader) {
@@ -336,10 +342,14 @@ router.post('/:id/approve', authenticate, async (req, res) => {
       };
     }
 
-    await dbStore.updateInvitation(request.id, { status: 'Accepted' });
+    const reqId = request.id || request._id || req.params.id;
+    await dbStore.updateInvitation(reqId, { status: 'Accepted' });
 
-    await dbStore.addTeamMember(project.id, {
-      userId: candidate.id,
+    const candidateUserId = String(candidate.id || candidate._id || request.candidateId || '');
+    await dbStore.addTeamMember(project.id || project._id, {
+      userId: candidateUserId,
+      id: candidateUserId,
+      _id: candidateUserId,
       fullName: candidate.fullName,
       name: candidate.fullName,
       email: candidate.email,
@@ -348,7 +358,7 @@ router.post('/:id/approve', authenticate, async (req, res) => {
       academicYear: candidate.academicYear,
     });
 
-    const updatedProject = await dbStore.findProjectById(project.id);
+    const updatedProject = await dbStore.findProjectById(project.id || project._id);
     res.status(200).json({
       message: `${candidate.fullName} has been approved and added to your team!`,
       project: updatedProject,
@@ -387,7 +397,8 @@ router.post('/:id/reject', authenticate, async (req, res) => {
       return;
     }
 
-    await dbStore.updateInvitation(item.id, { status: 'Rejected' });
+    const itemId = item.id || item._id || req.params.id;
+    await dbStore.updateInvitation(itemId, { status: 'Rejected' });
     res.status(200).json({ message: 'Request rejected successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -402,15 +413,16 @@ router.post('/:id/cancel', authenticate, async (req, res) => {
       return;
     }
 
-    const isLeader = invitation.leaderId === req.user.id;
-    const isCandidate = invitation.candidateId === req.user.id;
+    const isLeader = invitation.leaderId === req.user.id || String(invitation.leaderId) === String(req.user.id);
+    const isCandidate = invitation.candidateId === req.user.id || String(invitation.candidateId) === String(req.user.id);
 
     if (!isLeader && !isCandidate) {
       res.status(403).json({ error: 'Unauthorized.' });
       return;
     }
 
-    await dbStore.updateInvitation(invitation.id, { status: 'Cancelled' });
+    const invId = invitation.id || invitation._id || req.params.id;
+    await dbStore.updateInvitation(invId, { status: 'Cancelled' });
     res.status(200).json({ message: 'Cancelled successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });

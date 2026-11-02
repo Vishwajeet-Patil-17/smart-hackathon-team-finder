@@ -52,18 +52,27 @@ router.get('/student', authenticate, async (req, res) => {
 
     const profileCompletionPercentage = Math.round((completedFields / totalFields) * 100);
 
-    const allProjects = await dbStore.getAllProjects();
-    const projectsCreated = allProjects.filter(p => p.leaderId === userId);
-    const projectsJoined = allProjects.filter(
-      p => p.teamMembers?.some(m => m.userId === userId) && p.leaderId !== userId
-    );
+    const userEmail = (user.email || '').toLowerCase().trim();
+    const isUserLeader = (p) =>
+      (userId && String(p.leaderId) === String(userId)) ||
+      (userEmail && p.leaderEmail && p.leaderEmail.toLowerCase().trim() === userEmail);
 
-    const invitations = await dbStore.getInvitationsByCandidate(userId);
+    const isUserMember = (p) =>
+      (p.teamMembers || []).some(m =>
+        (userId && (String(m.userId) === String(userId) || String(m.id) === String(userId) || String(m._id) === String(userId))) ||
+        (userEmail && m.email && m.email.toLowerCase().trim() === userEmail)
+      );
+
+    const allProjects = await dbStore.getAllProjects();
+    const projectsCreated = allProjects.filter(p => isUserLeader(p));
+    const projectsJoined = allProjects.filter(p => !isUserLeader(p) && isUserMember(p));
+
+    const invitations = await dbStore.getInvitationsByCandidate(userId, userEmail);
     const pendingInvitations = invitations.filter(i => i.status === 'Pending');
 
-    const sentJoinRequests = await dbStore.getJoinRequestsByCandidate(userId);
+    const sentJoinRequests = await dbStore.getJoinRequestsByCandidate(userId, userEmail);
 
-    const assignedTasks = await dbStore.getTasksByMember(userId);
+    const assignedTasks = await dbStore.getTasksByMember(userId, userEmail);
     const now = new Date();
     const upcomingDeadlines = assignedTasks
       .filter(t => t.status !== 'Completed' && new Date(t.deadline) >= now)
@@ -71,7 +80,7 @@ router.get('/student', authenticate, async (req, res) => {
 
     const sanitizedStudent = sanitizeUser(user);
     const recommendedProjects = allProjects
-      .filter(p => p.recruitmentStatus === 'Open' && p.leaderId !== userId && !p.teamMembers?.some(m => m.userId === userId))
+      .filter(p => p.recruitmentStatus === 'Open' && !isUserLeader(p) && !isUserMember(p))
       .map(p => {
         const match = calculateCandidateMatch(p, sanitizedStudent);
         return {
@@ -84,17 +93,19 @@ router.get('/student', authenticate, async (req, res) => {
       .slice(0, 5);
 
     const allUserProjects = allProjects.filter(
-      p => p.leaderId === userId || p.teamMembers?.some(m => m.userId === userId)
+      p => isUserLeader(p) || isUserMember(p)
     );
 
     const peerEvaluationsToSubmit = [];
     for (const proj of allUserProjects) {
       const existingPeerEvals = await dbStore.getPeerEvaluationsByProject(proj.id);
-      const otherMembers = (proj.teamMembers || []).filter(m => m.userId !== userId);
+      const otherMembers = (proj.teamMembers || []).filter(m =>
+        String(m.userId) !== String(userId) && (!userEmail || !m.email || m.email.toLowerCase().trim() !== userEmail)
+      );
 
       for (const teammate of otherMembers) {
         const submitted = existingPeerEvals.some(
-          pe => pe.evaluatorId === userId && pe.evaluatedMemberId === teammate.userId
+          pe => (String(pe.evaluatorId) === String(userId)) && (String(pe.evaluatedMemberId) === String(teammate.userId))
         );
         peerEvaluationsToSubmit.push({
           projectId: proj.id,
@@ -149,17 +160,15 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     }
 
     const userId = req.user.id;
+    const userEmail = (req.user.email || '').toLowerCase().trim();
     const isLeader =
       Boolean(userId) && (
-        project.leaderId === userId ||
         String(project.leaderId) === String(userId) ||
-        (project.leaderEmail && req.user.email && project.leaderEmail.toLowerCase() === req.user.email.toLowerCase()) ||
-        (project.teamMembers && project.teamMembers.some(m => String(m.userId) === String(userId) || (m.email && req.user.email && m.email.toLowerCase() === req.user.email.toLowerCase()))) ||
-        true
+        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
       );
 
     if (!isLeader) {
-      res.status(403).json({ error: 'Unauthorized: You are not authorized to view this leader dashboard.' });
+      res.status(403).json({ error: 'Access Denied: Only the team leader of this project can access the leader dashboard.' });
       return;
     }
 
@@ -169,14 +178,16 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     const pendingCandidateIds = activeInvitations.map(i => i.candidateId);
 
     const projectJoinRequests = await dbStore.getJoinRequestsByProject(project.id);
-    const leaderJoinRequests = await dbStore.getJoinRequestsForLeader(userId, req.user.email);
+    const leaderJoinRequests = await dbStore.getJoinRequestsForLeader(userId, userEmail);
     const combinedRequestsMap = new Map();
     for (const r of projectJoinRequests) {
-      combinedRequestsMap.set(r.id, r);
+      const rId = String(r.id || r._id || '');
+      if (rId) combinedRequestsMap.set(rId, { ...r, id: rId, _id: rId });
     }
     for (const r of leaderJoinRequests) {
       if (String(r.projectId) === String(project.id)) {
-        combinedRequestsMap.set(r.id, r);
+        const rId = String(r.id || r._id || '');
+        if (rId) combinedRequestsMap.set(rId, { ...r, id: rId, _id: rId });
       }
     }
     const allProjectJoinRequests = Array.from(combinedRequestsMap.values());

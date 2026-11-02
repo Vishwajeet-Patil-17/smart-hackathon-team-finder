@@ -118,9 +118,11 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
       formData.append('interests', interestsStr);
       formData.append('preferredRoles', preferredRolesStr);
 
-      if (idCardFile) {
-        formData.append('idCardPhoto', idCardFile);
+      if (!idCardFile) {
+        throw new Error('Student ID card photo is required for registration. Please upload your ID card image.');
       }
+
+      formData.append('idCardPhoto', idCardFile);
 
       await register(formData);
       onClose();

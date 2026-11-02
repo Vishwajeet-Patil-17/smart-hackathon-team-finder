@@ -24,6 +24,7 @@ export const LeaderDashboard = ({
   initialProjectId,
   onOpenCreateProject,
   onOpenAuth,
+  onNavigateToStudent,
 }) => {
   const { user } = useAuth();
   const [projectsLed, setProjectsLed] = useState([]);
@@ -38,30 +39,40 @@ export const LeaderDashboard = ({
   const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   const fetchProjects = async () => {
+    if (!user) {
+      setProjectsLed([]);
+      setActiveProjectId('');
+      setDashboardData(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await api.getProjects();
       const allProjects = res.projects || [];
-      let led = allProjects.filter(
-        p => p.leaderId === user?.id ||
-             String(p.leaderId) === String(user?.id) ||
-             (p.leaderEmail && user?.email && p.leaderEmail.toLowerCase() === user.email.toLowerCase())
+      const userEmail = (user?.email || '').toLowerCase().trim();
+      const userId = user?.id ? String(user.id) : '';
+
+      const led = allProjects.filter(
+        p => (userId && String(p.leaderId) === userId) ||
+             (p.leaderEmail && userEmail && p.leaderEmail.toLowerCase().trim() === userEmail)
       );
-      if (led.length === 0 && allProjects.length > 0) {
-        led = allProjects;
-      }
+
       setProjectsLed(led);
       if (led.length > 0) {
-        const targetId = (activeProjectId && led.some(p => p.id === activeProjectId))
+        const targetId = (activeProjectId && led.some(p => String(p.id) === String(activeProjectId)))
           ? activeProjectId
           : led[0].id;
         setActiveProjectId(targetId);
         await fetchDashboardData(targetId);
       } else {
+        setActiveProjectId('');
+        setDashboardData(null);
         setIsLoading(false);
       }
     } catch (e) {
       console.warn('Failed to load projects:', e);
+      setProjectsLed([]);
       setIsLoading(false);
     }
   };
@@ -74,6 +85,11 @@ export const LeaderDashboard = ({
       setDashboardData(data);
     } catch (e) {
       console.warn('Failed to fetch leader dashboard:', e);
+      setDashboardData(null);
+      setActionFeedback({
+        type: 'error',
+        message: e.message || 'Access Denied: Only the team leader of this project can view this dashboard.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -205,30 +221,56 @@ export const LeaderDashboard = ({
 
   if (projectsLed.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 shadow-xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center max-w-xl mx-auto space-y-4 shadow-xl my-6">
         <div className="w-14 h-14 rounded-2xl bg-indigo-950/60 border border-indigo-800 text-indigo-400 flex items-center justify-center mx-auto shadow-md">
           <Shield className="w-7 h-7" />
         </div>
-        <h3 className="text-xl font-bold text-white">Team Leader Dashboard</h3>
+        <h3 className="text-xl font-bold text-white">Team Leader Access Only</h3>
         <p className="text-xs text-slate-400 leading-relaxed">
-          You are not currently leading a project. When you create a hackathon project, you automatically become its Team Leader with candidate matching, team-balance analysis, and task controls.
+          You are not currently the Team Leader of any hackathon project. The Leader Dashboard is exclusively accessible to team leaders who have posted a project.
         </p>
-        <button
-          onClick={onOpenCreateProject}
-          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md cursor-pointer inline-flex items-center gap-1.5 transition-colors"
-        >
-          <Target className="w-4 h-4" />
-          <span>Create Project as Leader</span>
-        </button>
+        <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+          {onNavigateToStudent && (
+            <button
+              onClick={onNavigateToStudent}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+            >
+              Back to Student Dashboard
+            </button>
+          )}
+          <button
+            onClick={onOpenCreateProject}
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+          >
+            <Target className="w-4 h-4" />
+            <span>Create Project as Team Leader</span>
+          </button>
+        </div>
       </div>
     );
   }
 
   if (isLoading || !dashboardData) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] text-slate-400 text-sm">
-        <RefreshCw className="w-5 h-5 animate-spin mr-2 text-indigo-400" />
-        Loading Team Leader dashboard...
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 text-sm gap-3">
+        {actionFeedback && actionFeedback.type === 'error' ? (
+          <div className="bg-rose-950/80 border border-rose-800 text-rose-200 p-5 rounded-xl max-w-md text-center text-xs space-y-3">
+            <p className="font-bold">{actionFeedback.message}</p>
+            {onNavigateToStudent && (
+              <button
+                onClick={onNavigateToStudent}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-medium cursor-pointer"
+              >
+                Return to Student Dashboard
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <RefreshCw className="w-5 h-5 animate-spin text-indigo-400" />
+            <span>Loading Team Leader dashboard...</span>
+          </>
+        )}
       </div>
     );
   }
@@ -420,13 +462,13 @@ export const LeaderDashboard = ({
 
                 <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
                   <button
-                    onClick={() => handleRejectJoinRequest(req.id)}
+                    onClick={() => handleRejectJoinRequest(req.id || req._id)}
                     className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-medium cursor-pointer transition-colors"
                   >
                     Decline
                   </button>
                   <button
-                    onClick={() => handleApproveJoinRequest(req.id)}
+                    onClick={() => handleApproveJoinRequest(req.id || req._id)}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <Check className="w-3.5 h-3.5" />

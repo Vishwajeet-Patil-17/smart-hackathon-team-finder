@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { runAllTests } from '../tests/runTests.js';
 import { getDatabaseStatus } from '../db/connection.js';
 import { getCloudinaryStatus } from '../services/cloudinaryService.js';
+import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
-router.get('/status', async (req, res) => {
+router.get('/status', authenticate, async (req, res) => {
   const dbStatus = getDatabaseStatus();
   const cloudStatus = getCloudinaryStatus();
 
@@ -44,7 +45,7 @@ router.get('/status', async (req, res) => {
   });
 });
 
-router.get('/tests', async (req, res) => {
+router.get('/tests', authenticate, async (req, res) => {
   try {
     const report = await runAllTests();
     res.status(200).json(report);
