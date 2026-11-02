@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useRealtime } from '../context/RealtimeContext.jsx';
 import { api } from '../services/api.js';
 import { CandidateMatchCard } from './CandidateMatchCard.jsx';
 import { TaskBoard } from './TaskBoard.jsx';
@@ -77,21 +78,25 @@ export const LeaderDashboard = ({
     }
   };
 
-  const fetchDashboardData = async (projId) => {
+  const { subscribe } = useRealtime();
+
+  const fetchDashboardData = async (projId, silent = false) => {
     if (!projId) return;
-    setIsLoading(true);
+    if (!silent && !dashboardData) setIsLoading(true);
     try {
       const data = await api.getLeaderDashboard(projId);
       setDashboardData(data);
     } catch (e) {
       console.warn('Failed to fetch leader dashboard:', e);
-      setDashboardData(null);
-      setActionFeedback({
-        type: 'error',
-        message: e.message || 'Access Denied: Only the team leader of this project can view this dashboard.',
-      });
+      if (!silent) {
+        setDashboardData(null);
+        setActionFeedback({
+          type: 'error',
+          message: e.message || 'Access Denied: Only the team leader of this project can view this dashboard.',
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -104,6 +109,36 @@ export const LeaderDashboard = ({
       fetchDashboardData(activeProjectId);
     }
   }, [activeProjectId]);
+
+  // Real-time synchronization for leader
+  useEffect(() => {
+    if (!activeProjectId) return;
+
+    const unsubs = [
+      subscribe('task:created', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('task:updated', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('invitation:accepted', () => {
+        fetchDashboardData(activeProjectId, true);
+        fetchProjects();
+      }),
+      subscribe('invitation:rejected', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('join_request:sent', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('join_request:approved', () => {
+        fetchDashboardData(activeProjectId, true);
+        fetchProjects();
+      }),
+      subscribe('project:updated', () => fetchDashboardData(activeProjectId, true)),
+    ];
+
+    const pollInterval = setInterval(() => {
+      fetchDashboardData(activeProjectId, true);
+    }, 6000);
+
+    return () => {
+      unsubs.forEach(u => u && u());
+      clearInterval(pollInterval);
+    };
+  }, [activeProjectId, subscribe]);
 
   const handleInvite = async (candidateId, proposedRole, message) => {
     if (!activeProjectId) return;

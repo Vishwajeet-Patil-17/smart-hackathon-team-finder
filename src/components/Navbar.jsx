@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useRealtime } from '../context/RealtimeContext.jsx';
 import { LogOut, Shield } from 'lucide-react';
 
 export const Navbar = ({
@@ -10,6 +11,7 @@ export const Navbar = ({
   isTeamLeader = false,
 }) => {
   const { user, logout } = useAuth();
+  const { isConnected } = useRealtime();
 
   return (
     <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 shadow-md">
@@ -22,6 +24,12 @@ export const Navbar = ({
           <div>
             <div className="font-bold text-white text-base leading-tight flex items-center gap-2">
               <span>Smart Hackathon Team Finder</span>
+              {isConnected && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800" title="Real-Time Sync Connected">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live
+                </span>
+              )}
             </div>
             <div className="text-[11px] text-slate-400 font-medium">
               Walchand College of Engineering, Sangli

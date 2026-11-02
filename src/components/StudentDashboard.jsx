@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useRealtime } from '../context/RealtimeContext.jsx';
 import { api } from '../services/api.js';
 import { ReliabilityCard } from './ReliabilityCard.jsx';
 import { EvaluationModal } from './EvaluationModal.jsx';
@@ -23,6 +24,7 @@ export const StudentDashboard = ({
   onOpenAuth,
 }) => {
   const { user } = useAuth();
+  const { subscribe } = useRealtime();
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(Boolean(user));
   const [selectedProject, setSelectedProject] = useState(null);
@@ -32,24 +34,53 @@ export const StudentDashboard = ({
   // Peer eval modal state
   const [peerEvalTarget, setPeerEvalTarget] = useState(null);
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (silent = false) => {
     if (!user) {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
       return;
     }
+    if (!silent && !dashboardData) setIsLoading(true);
     try {
       const data = await api.getStudentDashboard();
       setDashboardData(data);
     } catch (err) {
       console.warn('Failed to load student dashboard:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchDashboard();
   }, [user]);
+
+  // Real-time synchronization
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen to real-time events triggered from anywhere
+    const unsubs = [
+      subscribe('task:created', () => fetchDashboard(true)),
+      subscribe('task:updated', () => fetchDashboard(true)),
+      subscribe('invitation:sent', () => fetchDashboard(true)),
+      subscribe('invitation:accepted', () => fetchDashboard(true)),
+      subscribe('invitation:rejected', () => fetchDashboard(true)),
+      subscribe('join_request:sent', () => fetchDashboard(true)),
+      subscribe('join_request:approved', () => fetchDashboard(true)),
+      subscribe('join_request:rejected', () => fetchDashboard(true)),
+      subscribe('project:updated', () => fetchDashboard(true)),
+    ];
+
+    // Gentle background fallback polling every 6s
+    const pollInterval = setInterval(() => {
+      fetchDashboard(true);
+    }, 6000);
+
+    return () => {
+      unsubs.forEach(u => u && u());
+      clearInterval(pollInterval);
+    };
+  }, [user, subscribe]);
 
   const handleAcceptInvite = async (invId) => {
     try {

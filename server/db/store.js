@@ -499,8 +499,17 @@ export const dbStore = {
     if (mongoose.connection.readyState === 1) {
       try {
         const orClauses = [];
-        if (cIdStr) orClauses.push({ candidateId: cIdStr });
-        if (emailNorm) orClauses.push({ candidateEmail: emailNorm });
+        if (cIdStr) {
+          orClauses.push({ candidateId: cIdStr });
+          if (mongoose.Types.ObjectId.isValid(cIdStr)) {
+            orClauses.push({ candidateId: new mongoose.Types.ObjectId(cIdStr) });
+          }
+        }
+        if (emailNorm) {
+          const escaped = emailNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          orClauses.push({ candidateEmail: emailNorm });
+          orClauses.push({ candidateEmail: new RegExp(`^${escaped}$`, 'i') });
+        }
         if (orClauses.length > 0) {
           const docs = await InvitationModel.find({
             $or: orClauses,
@@ -525,9 +534,13 @@ export const dbStore = {
     const pIdStr = String(projectId).trim();
     if (mongoose.connection.readyState === 1) {
       try {
+        const orClauses = [{ projectId: pIdStr }];
+        if (mongoose.Types.ObjectId.isValid(pIdStr)) {
+          orClauses.push({ projectId: new mongoose.Types.ObjectId(pIdStr) });
+        }
         const docs = await InvitationModel.find({
-          projectId: pIdStr,
-          $or: [{ type: 'invitation' }, { type: { $exists: false } }],
+          $or: orClauses,
+          $and: [{ $or: [{ type: 'invitation' }, { type: { $exists: false } }] }],
         }).sort({ createdAt: -1 }).lean();
         if (docs && docs.length > 0) return docs.map(docToObj);
       } catch (e) {
@@ -535,7 +548,7 @@ export const dbStore = {
       }
     }
     return memoryInvitations.filter(i =>
-      String(i.projectId) === pIdStr && (!i.type || i.type === 'invitation')
+      (String(i.projectId) === pIdStr || i.projectId?._id?.toString() === pIdStr) && (!i.type || i.type === 'invitation')
     ).map(docToObj);
   },
 
@@ -571,8 +584,17 @@ export const dbStore = {
     if (mongoose.connection.readyState === 1) {
       try {
         const orClauses = [];
-        if (lIdStr) orClauses.push({ leaderId: lIdStr });
-        if (lEmailNorm) orClauses.push({ leaderEmail: lEmailNorm });
+        if (lIdStr) {
+          orClauses.push({ leaderId: lIdStr });
+          if (mongoose.Types.ObjectId.isValid(lIdStr)) {
+            orClauses.push({ leaderId: new mongoose.Types.ObjectId(lIdStr) });
+          }
+        }
+        if (lEmailNorm) {
+          const escaped = lEmailNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          orClauses.push({ leaderEmail: lEmailNorm });
+          orClauses.push({ leaderEmail: new RegExp(`^${escaped}$`, 'i') });
+        }
         if (orClauses.length > 0) {
           const docs = await InvitationModel.find({
             type: 'join_request',
@@ -598,8 +620,17 @@ export const dbStore = {
     if (mongoose.connection.readyState === 1) {
       try {
         const orClauses = [];
-        if (cIdStr) orClauses.push({ candidateId: cIdStr });
-        if (emailNorm) orClauses.push({ candidateEmail: emailNorm });
+        if (cIdStr) {
+          orClauses.push({ candidateId: cIdStr });
+          if (mongoose.Types.ObjectId.isValid(cIdStr)) {
+            orClauses.push({ candidateId: new mongoose.Types.ObjectId(cIdStr) });
+          }
+        }
+        if (emailNorm) {
+          const escaped = emailNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          orClauses.push({ candidateEmail: emailNorm });
+          orClauses.push({ candidateEmail: new RegExp(`^${escaped}$`, 'i') });
+        }
         if (orClauses.length > 0) {
           const docs = await InvitationModel.find({
             $or: orClauses,
@@ -768,19 +799,68 @@ export const dbStore = {
     const uIdStr = userId ? String(userId).trim() : '';
     const emailNorm = (userEmail || '').toLowerCase().trim();
 
+    const matchedTaskMap = new Map();
+
     if (mongoose.connection.readyState === 1) {
       try {
         const orClauses = [];
-        if (uIdStr) orClauses.push({ assignedTo: uIdStr });
-        if (emailNorm) orClauses.push({ assignedToEmail: emailNorm });
+        if (uIdStr) {
+          orClauses.push({ assignedTo: uIdStr });
+          if (mongoose.Types.ObjectId.isValid(uIdStr)) {
+            orClauses.push({ assignedTo: new mongoose.Types.ObjectId(uIdStr) });
+          }
+        }
+        if (emailNorm) {
+          const escaped = emailNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          orClauses.push({ assignedToEmail: emailNorm });
+          orClauses.push({ assignedToEmail: new RegExp(`^${escaped}$`, 'i') });
+        }
         if (orClauses.length > 0) {
           const docs = await TaskModel.find({ $or: orClauses }).sort({ deadline: 1 }).lean();
-          if (docs && docs.length > 0) return docs.map(docToObj);
+          if (docs && docs.length > 0) {
+            for (const d of docs) {
+              const obj = docToObj(d);
+              matchedTaskMap.set(String(obj.id || obj._id), obj);
+            }
+          }
+        }
+
+        // Also check if member is part of projects and has tasks matching their member identity
+        const userProjects = await this.getAllProjects();
+        const memberProjects = userProjects.filter(p =>
+          (p.teamMembers || []).some(m =>
+            (uIdStr && (String(m.userId) === uIdStr || String(m.id) === uIdStr || String(m._id) === uIdStr)) ||
+            (emailNorm && m.email && m.email.toLowerCase().trim() === emailNorm)
+          )
+        );
+
+        for (const p of memberProjects) {
+          const pTasks = await this.getTasksByProject(p.id || p._id);
+          for (const t of pTasks) {
+            const tAssigned = String(t.assignedTo || '');
+            const tEmail = String(t.assignedToEmail || '').toLowerCase().trim();
+            const isMatch =
+              (uIdStr && tAssigned === uIdStr) ||
+              (emailNorm && tEmail === emailNorm) ||
+              (p.teamMembers || []).some(m =>
+                ((uIdStr && (String(m.userId) === uIdStr || String(m.id) === uIdStr)) || (emailNorm && m.email && m.email.toLowerCase().trim() === emailNorm)) &&
+                (tAssigned === String(m.userId) || tAssigned === String(m.id) || (m.email && tEmail === m.email.toLowerCase().trim()))
+              );
+            if (isMatch) {
+              const obj = docToObj(t);
+              matchedTaskMap.set(String(obj.id || obj._id), obj);
+            }
+          }
+        }
+
+        if (matchedTaskMap.size > 0) {
+          return Array.from(matchedTaskMap.values()).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
         }
       } catch (e) {
         // fallback
       }
     }
+
     return memoryTasks.filter(t =>
       (uIdStr && (String(t.assignedTo) === uIdStr || String(t.assignedToId) === uIdStr)) ||
       (emailNorm && t.assignedToEmail && t.assignedToEmail.toLowerCase().trim() === emailNorm)

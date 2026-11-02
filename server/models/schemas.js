@@ -114,6 +114,8 @@ export const TaskSchema = new Schema({
   title: { type: String, required: true, trim: true },
   description: { type: String, default: '' },
   assignedTo: { type: Schema.Types.Mixed, required: true },
+  assignedToEmail: { type: String, lowercase: true, trim: true },
+  assignedToName: { type: String, trim: true },
   createdBy: { type: Schema.Types.Mixed, required: true },
   priority: {
     type: String,
@@ -129,7 +131,7 @@ export const TaskSchema = new Schema({
   completedAt: { type: Date },
   completedOnTime: { type: Boolean },
   isOverdue: { type: Boolean, default: false },
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 export const LeaderEvaluationSchema = new Schema({
   projectId: { type: Schema.Types.Mixed, required: true },

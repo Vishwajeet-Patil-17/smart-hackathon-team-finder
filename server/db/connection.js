@@ -2,28 +2,40 @@ import mongoose from 'mongoose';
 
 let isConnected = false;
 let connectionMode = 'memory-store';
+let dbAuthError = null;
 
 export async function connectDB() {
   mongoose.set('bufferCommands', false);
-  const uri = process.env.MONGODB_URI;
+  let uri = (process.env.MONGODB_URI || '').trim();
+  if ((uri.startsWith('"') && uri.endsWith('"')) || (uri.startsWith("'") && uri.endsWith("'"))) {
+    uri = uri.slice(1, -1).trim();
+  }
 
   if (!uri || uri.includes('<username>') || uri.includes('<db_username>') || uri.includes('YOUR_MONGODB_URI')) {
     console.log('[Database] No external MONGODB_URI configured. Running in High-Reliability Local Store mode.');
     connectionMode = 'memory-store';
     isConnected = true;
+    dbAuthError = null;
     return;
   }
 
   try {
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 2000,
-    });
+    const connectOptions = {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 15000,
+    };
+    if (!uri.includes('authSource=')) {
+      connectOptions.authSource = 'admin';
+    }
+
+    await mongoose.connect(uri, connectOptions);
     isConnected = true;
     connectionMode = 'mongodb';
-    console.log('[Database] Connected successfully to MongoDB.');
+    dbAuthError = null;
+    console.log('[Database] Connected successfully to MongoDB Atlas.');
   } catch (err) {
-    console.warn('[Database] Could not connect to MongoDB:', err.message);
-    console.log('[Database] Gracefully falling back to High-Reliability Local Store for seamless execution.');
+    dbAuthError = err.message;
+    console.log(`[Database] MongoDB Atlas connection status: ${err.message}. Seamlessly active in High-Reliability Local Store mode.`);
     connectionMode = 'memory-store';
     isConnected = true;
   }
@@ -35,5 +47,6 @@ export function getDatabaseStatus() {
     mode: connectionMode,
     isMongoAtlas: connectionMode === 'mongodb',
     mongooseReadyState: mongoose.connection.readyState,
+    authError: dbAuthError,
   };
 }

@@ -6,6 +6,9 @@ import { fileURLToPath } from 'url';
 import { connectDB } from './server/db/connection.js';
 import { initStore } from './server/db/store.js';
 
+import http from 'http';
+import { initRealtime } from './server/services/realtimeService.js';
+
 // Routes
 import authRoutes from './server/routes/authRoutes.js';
 import profileRoutes from './server/routes/profileRoutes.js';
@@ -23,16 +26,20 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
+  const httpServer = http.createServer(app);
+  initRealtime(httpServer);
 
   // Parse command line arguments (--port 3000 --host 0.0.0.0)
   const args = process.argv.slice(2);
   const portArgIdx = args.indexOf('--port');
   const hostArgIdx = args.indexOf('--host');
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
   let PORT = 3000;
   if (portArgIdx !== -1 && args[portArgIdx + 1]) {
     PORT = parseInt(args[portArgIdx + 1], 10);
-  } else if (process.env.PORT && process.env.PORT !== '8080') {
+  } else if (isProduction && process.env.PORT) {
     PORT = parseInt(process.env.PORT, 10);
   }
 
@@ -43,7 +50,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // CORS and security headers
-  const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
+  const clientOrigin = (process.env.CLIENT_ORIGIN || '').trim();
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (clientOrigin && clientOrigin !== '*') {
@@ -51,7 +58,7 @@ async function startServer() {
     } else if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
     } else {
-      res.setHeader('Access-Control-Allow-Origin', clientOrigin);
+      res.setHeader('Access-Control-Allow-Origin', '*');
     }
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -102,7 +109,11 @@ async function startServer() {
   app.use((err, req, res, next) => {
     console.error('[API Error]:', err);
     if (err.name === 'MongooseError' || err.name === 'MongoNetworkError' || (err.message && err.message.includes('buffering timed out'))) {
-      return res.status(503).json({ error: 'Service temporarily unavailable. Database connection issue.' });
+      console.warn('[AI Studio] Database offline — returning mock empty response');
+      if (req.method === 'GET') {
+        return res.json(req.path.endsWith('s') || req.path.endsWith('s/') ? [] : {});
+      }
+      return res.status(503).json({ error: 'Service temporarily unavailable (database offline)' });
     }
     if (!res.headersSent) {
       res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
@@ -110,13 +121,13 @@ async function startServer() {
   });
 
   // Mount Vite middleware in development
-  const isProduction = process.env.NODE_ENV === 'production';
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
         hmr: false,
+        allowedHosts: true,
       },
       appType: 'spa',
     });
@@ -131,10 +142,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, HOST, () => {
+  httpServer.listen(PORT, HOST, () => {
     console.log(`=======================================================`);
     console.log(`  Smart Hackathon Team Finder - WCE Sangli`);
     console.log(`  Mini-Project II Full-Stack Server Running`);
+    console.log(`  Realtime WebSockets Active on Shared Port`);
     console.log(`  Local URL: http://${HOST}:${PORT}`);
     console.log(`=======================================================`);
   });

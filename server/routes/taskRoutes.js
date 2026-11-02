@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { dbStore } from '../db/store.js';
 import { authenticate } from '../middleware/authMiddleware.js';
+import { broadcastEvent } from '../services/realtimeService.js';
 
 const router = Router();
 
@@ -69,6 +70,15 @@ router.post('/', authenticate, async (req, res) => {
       createdBy: String(leaderId),
       priority: priority || 'Medium',
       deadline: new Date(deadline).toISOString(),
+    });
+
+    broadcastEvent('task:created', {
+      task,
+      projectId: task.projectId,
+      assignedTo: task.assignedTo,
+      assignedToEmail: task.assignedToEmail,
+      assignedToName: task.assignedToName,
+      leaderName: req.user.fullName,
     });
 
     res.status(201).json({
@@ -149,6 +159,14 @@ router.put('/:id/status', authenticate, async (req, res) => {
     }
 
     const updated = await dbStore.updateTask(task.id || task._id || req.params.id, { status });
+
+    broadcastEvent('task:updated', {
+      task: updated,
+      projectId: task.projectId,
+      assignedTo: task.assignedTo,
+      status,
+    });
+
     res.status(200).json({
       message: 'Task status updated.',
       task: updated,

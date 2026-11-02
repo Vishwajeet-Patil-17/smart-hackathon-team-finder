@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api.js';
+import { useRealtime } from '../context/RealtimeContext.jsx';
 import { ProjectDetailModal } from './ProjectDetailModal.jsx';
 import { DOMAINS } from '../constants.js';
 import { Search, Plus, Users, ArrowRight } from 'lucide-react';
@@ -12,6 +13,7 @@ export const ProjectList = ({
   onOpenLeaderDashboard,
   onOpenAuth,
 }) => {
+  const { subscribe } = useRealtime();
   const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
   const [domain, setDomain] = useState('All');
@@ -19,8 +21,8 @@ export const ProjectList = ({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
 
-  const fetchProjects = async () => {
-    setIsLoading(true);
+  const fetchProjects = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await api.getProjects({
         domain: domain !== 'All' ? domain : undefined,
@@ -31,13 +33,25 @@ export const ProjectList = ({
     } catch (e) {
       console.warn('Failed to load projects:', e);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchProjects();
   }, [domain, status]);
+
+  useEffect(() => {
+    const unsubs = [
+      subscribe('project:created', () => fetchProjects(true)),
+      subscribe('project:updated', () => fetchProjects(true)),
+      subscribe('invitation:accepted', () => fetchProjects(true)),
+      subscribe('join_request:approved', () => fetchProjects(true)),
+    ];
+    return () => {
+      unsubs.forEach(u => u && u());
+    };
+  }, [subscribe, domain, status]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();

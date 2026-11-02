@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { RealtimeProvider } from './context/RealtimeContext.jsx';
 import { api } from './services/api.js';
 import { Navbar } from './components/Navbar.jsx';
 import { Footer } from './components/Footer.jsx';
@@ -149,7 +150,9 @@ function MainAppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <MainAppContent />
+      <RealtimeProvider>
+        <MainAppContent />
+      </RealtimeProvider>
     </AuthProvider>
   );
 }

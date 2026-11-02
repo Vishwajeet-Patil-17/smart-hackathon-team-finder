@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { dbStore } from '../db/store.js';
 import { authenticate } from '../middleware/authMiddleware.js';
+import { broadcastEvent } from '../services/realtimeService.js';
 
 const router = Router();
 
@@ -61,6 +62,11 @@ router.post('/:projectId', authenticate, async (req, res) => {
       authorName: user.fullName,
       authorRole,
       content: content.trim(),
+    });
+
+    broadcastEvent('discussion:message', {
+      message: newMessage,
+      projectId,
     });
 
     res.status(201).json({

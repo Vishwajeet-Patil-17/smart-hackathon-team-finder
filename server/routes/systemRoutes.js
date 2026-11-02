@@ -19,7 +19,9 @@ router.get('/status', authenticate, async (req, res) => {
       isMongoAtlas: dbStatus.isMongoAtlas,
       note: dbStatus.isMongoAtlas
         ? 'Connected to live MongoDB Atlas cluster.'
-        : 'Running in Local Store mode. To switch to MongoDB Atlas, set MONGODB_URI in .env.',
+        : (dbStatus.authError
+            ? `MongoDB Atlas authentication notice: ${dbStatus.authError}. Running in High-Reliability Local Store mode.`
+            : 'Running in Local Store mode. To switch to MongoDB Atlas, set MONGODB_URI in .env.'),
     },
     cloudinary: {
       status: cloudStatus.isConfigured ? 'Connected to Cloudinary' : 'Secure Vault Mode Active',

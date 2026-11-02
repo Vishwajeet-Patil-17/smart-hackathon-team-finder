@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { dbStore } from '../db/store.js';
 import { authenticate } from '../middleware/authMiddleware.js';
+import { broadcastEvent } from '../services/realtimeService.js';
 
 const router = Router();
 
@@ -71,6 +72,15 @@ router.post('/', authenticate, async (req, res) => {
       leaderEmail: leader.email,
       proposedRole: proposedRole.trim(),
       message: message ? message.trim() : '',
+    });
+
+    broadcastEvent('invitation:sent', {
+      invitation: newInvitation,
+      candidateId: newInvitation.candidateId,
+      candidateEmail: newInvitation.candidateEmail,
+      projectId: newInvitation.projectId,
+      projectName: newInvitation.projectName,
+      leaderName: newInvitation.leaderName,
     });
 
     res.status(201).json({
@@ -167,6 +177,15 @@ router.post('/:id/accept', authenticate, async (req, res) => {
 
     const updatedProject = await dbStore.findProjectById(project.id || project._id);
 
+    broadcastEvent('invitation:accepted', {
+      invitationId: invId,
+      projectId: project.id || project._id,
+      candidateId: candidateUserId,
+      candidateName: user.fullName,
+      leaderId: project.leaderId,
+      project: updatedProject,
+    });
+
     res.status(200).json({
       message: 'Invitation accepted! You have joined the team.',
       project: updatedProject,
@@ -240,6 +259,14 @@ router.post('/join-request', authenticate, async (req, res) => {
       leaderEmail: leader ? leader.email : project.leaderEmail,
       proposedRole: role,
       message: message ? message.trim() : '',
+    });
+
+    broadcastEvent('join_request:sent', {
+      joinRequest,
+      leaderId: joinRequest.leaderId,
+      leaderEmail: joinRequest.leaderEmail,
+      candidateName: joinRequest.candidateName,
+      projectName: joinRequest.projectName,
     });
 
     res.status(201).json({
@@ -359,6 +386,16 @@ router.post('/:id/approve', authenticate, async (req, res) => {
     });
 
     const updatedProject = await dbStore.findProjectById(project.id || project._id);
+
+    broadcastEvent('join_request:approved', {
+      requestId: reqId,
+      projectId: project.id || project._id,
+      candidateId: candidateUserId,
+      candidateName: candidate.fullName,
+      leaderId: project.leaderId,
+      project: updatedProject,
+    });
+
     res.status(200).json({
       message: `${candidate.fullName} has been approved and added to your team!`,
       project: updatedProject,
@@ -399,6 +436,15 @@ router.post('/:id/reject', authenticate, async (req, res) => {
 
     const itemId = item.id || item._id || req.params.id;
     await dbStore.updateInvitation(itemId, { status: 'Rejected' });
+
+    broadcastEvent('invitation:rejected', {
+      itemId,
+      projectId: item.projectId,
+      candidateId: item.candidateId,
+      leaderId: item.leaderId,
+      type: item.type,
+    });
+
     res.status(200).json({ message: 'Request rejected successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });

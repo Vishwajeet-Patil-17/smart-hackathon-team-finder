@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api.js';
+import { useRealtime } from '../context/RealtimeContext.jsx';
 import { Send, MessageSquare, ShieldCheck } from 'lucide-react';
 
 export const TeamDiscussion = ({
@@ -7,6 +8,7 @@ export const TeamDiscussion = ({
   projectName,
   currentUserId,
 }) => {
+  const { subscribe } = useRealtime();
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,9 +27,24 @@ export const TeamDiscussion = ({
   useEffect(() => {
     setIsLoading(true);
     fetchMessages().finally(() => setIsLoading(false));
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
-  }, [projectId]);
+
+    // Instant WebSocket reception
+    const unsub = subscribe('discussion:message', payload => {
+      if (String(payload.projectId) === String(projectId) && payload.message) {
+        setMessages(prev => {
+          const exists = prev.some(m => String(m.id || m._id) === String(payload.message.id || payload.message._id));
+          if (exists) return prev;
+          return [...prev, payload.message];
+        });
+      }
+    });
+
+    const interval = setInterval(fetchMessages, 6000);
+    return () => {
+      if (unsub) unsub();
+      clearInterval(interval);
+    };
+  }, [projectId, subscribe]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
