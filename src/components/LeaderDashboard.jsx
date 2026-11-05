@@ -52,28 +52,34 @@ export const LeaderDashboard = ({
       const res = await api.getProjects();
       const allProjects = res.projects || [];
       const userEmail = (user?.email || '').toLowerCase().trim();
-      const userId = user?.id ? String(user.id) : '';
+      const userId = user?.id ? String(user.id) : (user?._id ? String(user._id) : '');
 
-      const led = allProjects.filter(
-        p => (userId && String(p.leaderId) === userId) ||
-             (p.leaderEmail && userEmail && p.leaderEmail.toLowerCase().trim() === userEmail)
-      );
+      const led = allProjects.filter(p => {
+        const pLeaderId = p.leaderId ? String(p.leaderId._id || p.leaderId.id || p.leaderId) : '';
+        const pLeaderEmail = (p.leaderEmail || '').toLowerCase().trim();
+        return (Boolean(userId) && Boolean(pLeaderId) && pLeaderId === userId) ||
+               (Boolean(userEmail) && Boolean(pLeaderEmail) && pLeaderEmail === userEmail);
+      });
 
       setProjectsLed(led);
       if (led.length > 0) {
-        const targetId = (activeProjectId && led.some(p => String(p.id) === String(activeProjectId)))
+        const targetId = (activeProjectId && led.some(p => String(p.id || p._id) === String(activeProjectId)))
           ? activeProjectId
-          : led[0].id;
-        setActiveProjectId(targetId);
-        await fetchDashboardData(targetId);
+          : String(led[0].id || led[0]._id);
+
+        if (targetId !== activeProjectId) {
+          setActiveProjectId(targetId);
+        } else {
+          await fetchDashboardData(targetId);
+        }
       } else {
         setActiveProjectId('');
         setDashboardData(null);
-        setIsLoading(false);
       }
     } catch (e) {
       console.warn('Failed to load projects:', e);
       setProjectsLed([]);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -81,11 +87,15 @@ export const LeaderDashboard = ({
   const { subscribe } = useRealtime();
 
   const fetchDashboardData = async (projId, silent = false) => {
-    if (!projId) return;
+    if (!projId) {
+      if (!silent) setIsLoading(false);
+      return;
+    }
     if (!silent && !dashboardData) setIsLoading(true);
     try {
       const data = await api.getLeaderDashboard(projId);
       setDashboardData(data);
+      setActionFeedback(null);
     } catch (e) {
       console.warn('Failed to fetch leader dashboard:', e);
       if (!silent) {
@@ -103,6 +113,12 @@ export const LeaderDashboard = ({
   useEffect(() => {
     fetchProjects();
   }, [user]);
+
+  useEffect(() => {
+    if (initialProjectId && String(initialProjectId) !== String(activeProjectId)) {
+      setActiveProjectId(String(initialProjectId));
+    }
+  }, [initialProjectId]);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -130,9 +146,12 @@ export const LeaderDashboard = ({
       subscribe('project:updated', () => fetchDashboardData(activeProjectId, true)),
     ];
 
+    // Background poll every 15 seconds when tab is visible
     const pollInterval = setInterval(() => {
-      fetchDashboardData(activeProjectId, true);
-    }, 6000);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchDashboardData(activeProjectId, true);
+      }
+    }, 15000);
 
     return () => {
       unsubs.forEach(u => u && u());
@@ -254,7 +273,18 @@ export const LeaderDashboard = ({
     );
   }
 
-  if (projectsLed.length === 0) {
+  // If we are currently loading projects for the first time
+  if (isLoading && projectsLed.length === 0 && !dashboardData) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[350px] text-gray-500 text-sm gap-3">
+        <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
+        <span className="font-medium">Loading your projects...</span>
+      </div>
+    );
+  }
+
+  // If projects list has finished loading and user leads 0 projects
+  if (!isLoading && projectsLed.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center max-w-xl mx-auto space-y-4 shadow-sm my-6">
         <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto shadow-xs">

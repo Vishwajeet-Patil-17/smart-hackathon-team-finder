@@ -667,7 +667,7 @@ export const StudentDashboard = ({
                       </span>
                     </div>
                     <button
-                      onClick={() => onNavigateToLeader(p.id)}
+                      onClick={() => onNavigateToLeader(p.id || p._id)}
                       className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
                     >
                       <span>Open Team Leader Dashboard</span>

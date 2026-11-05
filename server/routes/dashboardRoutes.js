@@ -185,33 +185,50 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
       return;
     }
 
-    const userId = req.user.id;
-    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const projId = String(project.id || project._id || projectId);
+    const userId = req.user?.id ? String(req.user.id) : (req.user?._id ? String(req.user._id) : '');
+    const userEmail = (req.user?.email || '').toLowerCase().trim();
+    const leaderIdStr = project.leaderId ? String(project.leaderId._id || project.leaderId.id || project.leaderId) : '';
+    const leaderEmailStr = (project.leaderEmail || '').toLowerCase().trim();
+
     const isLeader =
-      Boolean(userId) && (
-        String(project.leaderId) === String(userId) ||
-        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
-      );
+      (Boolean(userId) && Boolean(leaderIdStr) && leaderIdStr === userId) ||
+      (Boolean(userEmail) && Boolean(leaderEmailStr) && leaderEmailStr === userEmail);
 
     if (!isLeader) {
       res.status(403).json({ error: 'Access Denied: Only the team leader of this project can access the leader dashboard.' });
       return;
     }
 
-    const allUsers = await dbStore.getAllUsers();
-    const invitations = await dbStore.getInvitationsByProject(project.id);
+    // Execute all sub-queries in parallel for instantaneous load times
+    const [
+      allUsers,
+      invitations,
+      projectJoinRequests,
+      leaderJoinRequests,
+      tasks,
+      leaderEvaluations,
+      peerEvaluations
+    ] = await Promise.all([
+      dbStore.getAllUsers(),
+      dbStore.getInvitationsByProject(projId),
+      dbStore.getJoinRequestsByProject(projId),
+      dbStore.getJoinRequestsForLeader(userId, userEmail),
+      dbStore.getTasksByProject(projId),
+      dbStore.getLeaderEvaluations(projId),
+      dbStore.getPeerEvaluationsByProject(projId),
+    ]);
+
     const activeInvitations = invitations.filter(i => i.status === 'Pending');
     const pendingCandidateIds = activeInvitations.map(i => i.candidateId);
 
-    const projectJoinRequests = await dbStore.getJoinRequestsByProject(project.id);
-    const leaderJoinRequests = await dbStore.getJoinRequestsForLeader(userId, userEmail);
     const combinedRequestsMap = new Map();
     for (const r of projectJoinRequests) {
       const rId = String(r.id || r._id || '');
       if (rId) combinedRequestsMap.set(rId, { ...r, id: rId, _id: rId });
     }
     for (const r of leaderJoinRequests) {
-      if (String(r.projectId) === String(project.id)) {
+      if (String(r.projectId) === projId) {
         const rId = String(r.id || r._id || '');
         if (rId) combinedRequestsMap.set(rId, { ...r, id: rId, _id: rId });
       }
@@ -225,10 +242,10 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     const requiredTeamSize = project.totalTeamSize;
     const isTeamFull = currentTeamSize >= requiredTeamSize;
 
-    const teamMemberIds = new Set(teamMembers.map(m => m.userId));
-    teamMemberIds.add(project.leaderId);
+    const teamMemberIds = new Set(teamMembers.map(m => String(m.userId || m.id || m._id)));
+    if (leaderIdStr) teamMemberIds.add(leaderIdStr);
 
-    const eligibleCandidates = candidates.filter(c => !teamMemberIds.has(c.id));
+    const eligibleCandidates = candidates.filter(c => !teamMemberIds.has(String(c.id)));
     const candidateRecommendations = !isTeamFull && project.recruitmentStatus === 'Open'
       ? eligibleCandidates
           .map(c => calculateCandidateMatch(project, c, pendingCandidateIds))
@@ -238,14 +255,10 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
 
     const teamBalance = analyzeTeamBalance(project, candidates, pendingCandidateIds);
 
-    const tasks = await dbStore.getTasksByProject(project.id);
     const overdueTasks = tasks.filter(t => t.isOverdue);
     const completedTasks = tasks.filter(t => t.status === 'Completed');
     const taskCompletionPercentage =
       tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
-
-    const leaderEvaluations = await dbStore.getLeaderEvaluations(project.id);
-    const peerEvaluations = await dbStore.getPeerEvaluationsByProject(project.id);
 
     const memberProgress = teamMembers.map(m => {
       const memberTasks = tasks.filter(t => t.assignedTo === m.userId);
