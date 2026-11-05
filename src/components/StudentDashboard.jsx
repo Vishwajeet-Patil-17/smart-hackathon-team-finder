@@ -22,6 +22,27 @@ import {
   Calendar,
 } from 'lucide-react';
 
+const STUDENT_CACHE_PREFIX = 'smart_hackathon_student_cache_';
+
+const getCachedStudentDashboard = (uid) => {
+  if (!uid || typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${STUDENT_CACHE_PREFIX}${uid}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const setCachedStudentDashboard = (uid, data) => {
+  if (!uid || !data || typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(`${STUDENT_CACHE_PREFIX}${uid}`, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Student cache write warning:', e);
+  }
+};
+
 export const StudentDashboard = ({
   onNavigateToLeader,
   onOpenCreateProject,
@@ -29,8 +50,10 @@ export const StudentDashboard = ({
 }) => {
   const { user } = useAuth();
   const { subscribe } = useRealtime();
-  const [dashboardData, setDashboardData] = useState(null);
-  const [isLoading, setIsLoading] = useState(Boolean(user));
+  const userId = user?.id || user?._id || '';
+
+  const [dashboardData, setDashboardData] = useState(() => getCachedStudentDashboard(userId));
+  const [isLoading, setIsLoading] = useState(!dashboardData && Boolean(user));
   const [selectedProject, setSelectedProject] = useState(null);
 
   const [actionFeedback, setActionFeedback] = useState(null);
@@ -49,19 +72,33 @@ export const StudentDashboard = ({
       if (!silent) setIsLoading(false);
       return;
     }
-    if (!silent && !dashboardData) setIsLoading(true);
+    const currentCached = getCachedStudentDashboard(userId);
+    if (currentCached && !dashboardData) {
+      setDashboardData(currentCached);
+    }
+    if (!silent && !dashboardData && !currentCached) {
+      setIsLoading(true);
+    }
     try {
       const data = await api.getStudentDashboard();
       setDashboardData(data);
+      setCachedStudentDashboard(userId, data);
     } catch (err) {
       console.warn('Failed to load student dashboard:', err);
     } finally {
-      if (!silent) setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboard();
+    if (userId) {
+      const cached = getCachedStudentDashboard(userId);
+      if (cached) {
+        setDashboardData(cached);
+        setIsLoading(false);
+      }
+    }
+    fetchDashboard(Boolean(dashboardData));
   }, [user]);
 
   // Real-time synchronization

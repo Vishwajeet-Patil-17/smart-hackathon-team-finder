@@ -10,28 +10,23 @@
       "skills": [
         {
           "name": "Matlab",
-          "proficiency": "Intermediate",
-          "_id": "6aec172812b0fa0355b1a3e6"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Pspice",
-          "proficiency": "Intermediate",
-          "_id": "6aec172812b0fa0355b1a3e7"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Etab",
-          "proficiency": "Intermediate",
-          "_id": "6aec172812b0fa0355b1a3e8"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Eplaf",
-          "proficiency": "Intermediate",
-          "_id": "6aec172812b0fa0355b1a3e9"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Propeus",
-          "proficiency": "Intermediate",
-          "_id": "6aec172812b0fa0355b1a3ea"
+          "proficiency": "Intermediate"
         }
       ],
       "experienceLevel": "Intermediate",
@@ -67,23 +62,19 @@
       "skills": [
         {
           "name": "React",
-          "proficiency": "Intermediate",
-          "_id": "6aec4c2775b7c167d8398956"
+          "proficiency": "Intermediate"
         },
         {
           "name": "JavaScript",
-          "proficiency": "Advanced",
-          "_id": "6aec4c2775b7c167d8398957"
+          "proficiency": "Advanced"
         },
         {
           "name": "Cpp",
-          "proficiency": "Intermediate",
-          "_id": "6aec4c2775b7c167d8398958"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Mysql",
-          "proficiency": "Intermediate",
-          "_id": "6aec4c2775b7c167d8398959"
+          "proficiency": "Intermediate"
         }
       ],
       "experienceLevel": "Intermediate",
@@ -122,33 +113,27 @@
       "skills": [
         {
           "name": "JavaScript",
-          "proficiency": "Advanced",
-          "_id": "6aec4f6575b7c167d839895b"
+          "proficiency": "Advanced"
         },
         {
           "name": "Express.js",
-          "proficiency": "Intermediate",
-          "_id": "6aec4f6575b7c167d839895c"
+          "proficiency": "Intermediate"
         },
         {
           "name": "React.js",
-          "proficiency": "Intermediate",
-          "_id": "6aec4f6575b7c167d839895d"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Node.js",
-          "proficiency": "Intermediate",
-          "_id": "6aec4f6575b7c167d839895e"
+          "proficiency": "Intermediate"
         },
         {
           "name": "Database",
-          "proficiency": "Intermediate",
-          "_id": "6aec4f6575b7c167d839895f"
+          "proficiency": "Intermediate"
         },
         {
           "name": "UI/UX",
-          "proficiency": "Intermediate",
-          "_id": "6aec4f6575b7c167d8398960"
+          "proficiency": "Intermediate"
         }
       ],
       "experienceLevel": "Intermediate",
@@ -187,56 +172,47 @@
         {
           "skill": "Node.js",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd025"
+          "isMandatory": true
         },
         {
           "skill": "MongoDB",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd026"
+          "isMandatory": true
         },
         {
           "skill": "UI/UX Design",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd027"
+          "isMandatory": true
         },
         {
           "skill": "React.js",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd028"
+          "isMandatory": true
         },
         {
           "skill": "Node.js",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd029"
+          "isMandatory": true
         },
         {
           "skill": "Express.js",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd02a"
+          "isMandatory": true
         },
         {
           "skill": "Python",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd02b"
+          "isMandatory": true
         },
         {
           "skill": "IoT",
           "minProficiency": "Intermediate",
-          "isMandatory": true,
-          "_id": "6aec53c1c79c2237021fd02c"
+          "isMandatory": true
         },
         {
           "skill": "JavaScript",
           "minProficiency": "Intermediate",
-          "isMandatory": false,
-          "_id": "6aec53c1c79c2237021fd02d"
+          "isMandatory": false
         }
       ],
       "requiredRoles": [
@@ -265,7 +241,8 @@
           "department": "Information Technology",
           "academicYear": "Third Year",
           "joinedAt": "2026-11-05T10:00:33.219Z",
-          "_id": "6aec53c1c79c2237021fd02e"
+          "_id": "6aec4f6575b7c167d839895a",
+          "id": "6aec4f6575b7c167d839895a"
         }
       ],
       "createdAt": "2026-11-05T10:00:33.295Z",

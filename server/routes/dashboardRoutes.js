@@ -7,9 +7,25 @@ import { calculateReliabilityScore } from '../services/reliabilityService.js';
 
 const router = Router();
 
-function sanitizeUser(u) {
+function sanitizeUser(u, includeFullIdCard = false) {
   if (!u) return null;
   const uid = String(u.id || u._id || '');
+  let sanitizedIdCard = null;
+  if (u.idCard) {
+    if (includeFullIdCard && u.idCard.secureUrl && u.idCard.secureUrl.length < 200000) {
+      sanitizedIdCard = u.idCard;
+    } else {
+      sanitizedIdCard = {
+        assetId: u.idCard.assetId || 'id_card_vault',
+        storageProvider: u.idCard.storageProvider || 'secure-local-vault',
+        format: u.idCard.format || 'jpeg',
+        uploadedAt: u.idCard.uploadedAt,
+        isRestricted: u.idCard.isRestricted,
+        secureUrl: (u.idCard.secureUrl && u.idCard.secureUrl.startsWith('http')) ? u.idCard.secureUrl : undefined,
+      };
+    }
+  }
+
   return {
     id: uid,
     _id: uid,
@@ -23,10 +39,10 @@ function sanitizeUser(u) {
     preferredRoles: u.preferredRoles || [],
     availability: u.availability || '15-20 hrs/week',
     bio: u.bio || '',
-    githubUrl: u.githubUrl,
-    linkedinUrl: u.linkedinUrl,
-    relevantExperience: u.relevantExperience,
-    idCard: u.idCard,
+    githubUrl: u.githubUrl || '',
+    linkedinUrl: u.linkedinUrl || '',
+    relevantExperience: u.relevantExperience || '',
+    idCard: sanitizedIdCard,
   };
 }
 
@@ -39,7 +55,7 @@ router.get('/student', authenticate, async (req, res) => {
       return;
     }
 
-    const { passwordHash: _, ...safeUser } = user;
+    const safeUser = sanitizeUser(user, false);
 
     let completedFields = 0;
     const totalFields = 9;
@@ -66,19 +82,21 @@ router.get('/student', authenticate, async (req, res) => {
         (userEmail && m.email && m.email.toLowerCase().trim() === userEmail)
       );
 
-    const allProjects = await dbStore.getAllProjects();
-    const projectsCreated = allProjects.filter(p => isUserLeader(p));
-    const projectsJoined = allProjects.filter(p => !isUserLeader(p) && isUserMember(p));
+    // Concurrently fetch all independent queries in a single round-trip
+    const [allProjects, invitations, sentJoinRequests, rawAssignedTasks] = await Promise.all([
+      dbStore.getAllProjects().catch(() => []),
+      dbStore.getInvitationsByCandidate(userId, userEmail).catch(() => []),
+      dbStore.getJoinRequestsByCandidate(userId, userEmail).catch(() => []),
+      dbStore.getTasksByMember(userId, userEmail).catch(() => []),
+    ]);
 
-    const invitations = await dbStore.getInvitationsByCandidate(userId, userEmail);
-    const pendingInvitations = invitations.filter(i => i.status === 'Pending');
+    const projectsCreated = (allProjects || []).filter(p => isUserLeader(p));
+    const projectsJoined = (allProjects || []).filter(p => !isUserLeader(p) && isUserMember(p));
+    const pendingInvitations = (invitations || []).filter(i => i.status === 'Pending');
 
-    const sentJoinRequests = await dbStore.getJoinRequestsByCandidate(userId, userEmail);
-
-    const rawAssignedTasks = await dbStore.getTasksByMember(userId, userEmail);
     const now = new Date();
     const assignedTasks = (rawAssignedTasks || []).map(t => {
-      const proj = allProjects.find(p => String(p.id || p._id) === String(t.projectId || t.projectId?._id));
+      const proj = (allProjects || []).find(p => String(p.id || p._id) === String(t.projectId || t.projectId?._id));
       const deadlineDate = new Date(t.deadline);
       const isOverdue = t.status !== 'Completed' && !isNaN(deadlineDate.getTime()) && deadlineDate < now;
       return {
@@ -104,8 +122,8 @@ router.get('/student', authenticate, async (req, res) => {
       .filter(t => t.status !== 'Completed' && new Date(t.deadline) >= now)
       .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
 
-    const sanitizedStudent = sanitizeUser(user);
-    const recommendedProjects = allProjects
+    const sanitizedStudent = safeUser;
+    const recommendedProjects = (allProjects || [])
       .filter(p => p.recruitmentStatus === 'Open' && !isUserLeader(p) && !isUserMember(p))
       .map(p => {
         const match = calculateCandidateMatch(p, sanitizedStudent);
@@ -118,23 +136,37 @@ router.get('/student', authenticate, async (req, res) => {
       .sort((a, b) => b.matchScore - a.matchScore)
       .slice(0, 5);
 
-    const allUserProjects = allProjects.filter(
+    const allUserProjects = (allProjects || []).filter(
       p => isUserLeader(p) || isUserMember(p)
     );
 
+    // Parallel fetch for all projects' tasks and peer evaluations
+    const projectSubData = await Promise.all(
+      allUserProjects.map(async (proj) => {
+        const pId = String(proj.id || proj._id);
+        const [projTasks, projPeerEvals] = await Promise.all([
+          dbStore.getTasksByProject(pId).catch(() => []),
+          dbStore.getPeerEvaluationsByProject(pId).catch(() => []),
+        ]);
+        return { proj, projTasks, projPeerEvals };
+      })
+    );
+
     const peerEvaluationsToSubmit = [];
-    for (const proj of allUserProjects) {
-      const existingPeerEvals = await dbStore.getPeerEvaluationsByProject(proj.id);
+    const reliabilityScores = [];
+
+    for (const { proj, projTasks, projPeerEvals } of projectSubData) {
+      const pId = String(proj.id || proj._id);
       const otherMembers = (proj.teamMembers || []).filter(m =>
         String(m.userId) !== String(userId) && (!userEmail || !m.email || m.email.toLowerCase().trim() !== userEmail)
       );
 
       for (const teammate of otherMembers) {
-        const submitted = existingPeerEvals.some(
+        const submitted = (projPeerEvals || []).some(
           pe => (String(pe.evaluatorId) === String(userId)) && (String(pe.evaluatedMemberId) === String(teammate.userId))
         );
         peerEvaluationsToSubmit.push({
-          projectId: proj.id,
+          projectId: pId,
           projectName: proj.name,
           projectStatus: proj.recruitmentStatus,
           isCompleted: proj.recruitmentStatus === 'Completed',
@@ -144,17 +176,12 @@ router.get('/student', authenticate, async (req, res) => {
           alreadySubmitted: submitted,
         });
       }
-    }
 
-    const reliabilityScores = [];
-    for (const proj of allUserProjects) {
-      const projTasks = await dbStore.getTasksByProject(proj.id);
-      const projPeerEvals = await dbStore.getPeerEvaluationsByProject(proj.id);
       const score = calculateReliabilityScore(
         userId,
-        proj.id,
-        projTasks,
-        projPeerEvals,
+        pId,
+        projTasks || [],
+        projPeerEvals || [],
         proj.recruitmentStatus === 'Completed'
       );
       score.projectName = proj.name;
@@ -277,7 +304,7 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     const allProjectJoinRequests = Array.from(combinedRequestsMap.values());
     const pendingJoinRequests = allProjectJoinRequests.filter(r => r.status === 'Pending');
 
-    const candidates = (allUsers || []).map(sanitizeUser).filter(Boolean);
+    const candidates = (allUsers || []).map(u => sanitizeUser(u, false)).filter(Boolean);
     const teamMembers = (project.teamMembers || []).map(m => {
       const mId = String(m.userId?._id || m.userId || m.id || m._id || '');
       const fName = m.fullName || m.name || 'Team Member';

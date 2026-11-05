@@ -25,6 +25,10 @@ let memoryLeaderEvals = [];
 let memoryPeerEvals = [];
 let memoryMessages = [];
 
+let lastUsersFetch = 0;
+let lastProjectsFetch = 0;
+const CACHE_TTL_MS = 6000; // 6-second in-memory TTL to collapse redundant cloud database round-trips
+
 function docToObj(doc) {
   if (!doc) return null;
   const obj = typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
@@ -349,12 +353,16 @@ export const dbStore = {
 
   async getAllUsers() {
     await initStore();
+    if (Date.now() - lastUsersFetch < CACHE_TTL_MS && memoryUsers.length > 0) {
+      return [...memoryUsers];
+    }
     if (mongoose.connection.readyState === 1) {
       try {
-        const docs = await UserModel.find({}).lean();
+        const docs = await UserModel.find({}, { passwordHash: 0, 'idCard.secureUrl': 0 }).lean();
         if (docs && docs.length > 0) {
           const users = docs.map(docToObj);
           memoryUsers = users;
+          lastUsersFetch = Date.now();
           return users;
         }
       } catch (e) {
@@ -367,12 +375,16 @@ export const dbStore = {
   // PROJECTS
   async getAllProjects() {
     await initStore();
+    if (Date.now() - lastProjectsFetch < CACHE_TTL_MS && memoryProjects.length > 0) {
+      return [...memoryProjects];
+    }
     if (mongoose.connection.readyState === 1) {
       try {
         const docs = await ProjectModel.find({}).sort({ createdAt: -1 }).lean();
         if (docs && docs.length > 0) {
           const projs = docs.map(docToObj);
           memoryProjects = projs;
+          lastProjectsFetch = Date.now();
           return projs;
         }
       } catch (e) {
@@ -868,31 +880,28 @@ export const dbStore = {
           }
         }
 
-        // Also check if member is part of projects and has tasks matching their member identity
+        if (matchedTaskMap.size > 0) {
+          return Array.from(matchedTaskMap.values()).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+        }
+
+        // If no tasks matched by direct ID, check projects the user belongs to
         const userProjects = await this.getAllProjects();
-        const memberProjects = userProjects.filter(p =>
-          (p.teamMembers || []).some(m =>
+        const memberProjectIds = userProjects
+          .filter(p => (p.teamMembers || []).some(m =>
             (uIdStr && (String(m.userId) === uIdStr || String(m.id) === uIdStr || String(m._id) === uIdStr)) ||
             (emailNorm && m.email && m.email.toLowerCase().trim() === emailNorm)
-          )
-        );
+          ))
+          .map(p => p.id || p._id)
+          .filter(Boolean);
 
-        for (const p of memberProjects) {
-          const pTasks = await this.getTasksByProject(p.id || p._id);
-          for (const t of pTasks) {
-            const tAssigned = String(t.assignedTo || '');
-            const tEmail = String(t.assignedToEmail || '').toLowerCase().trim();
-            const isMatch =
-              (uIdStr && tAssigned === uIdStr) ||
-              (emailNorm && tEmail === emailNorm) ||
-              (p.teamMembers || []).some(m =>
-                ((uIdStr && (String(m.userId) === uIdStr || String(m.id) === uIdStr)) || (emailNorm && m.email && m.email.toLowerCase().trim() === emailNorm)) &&
-                (tAssigned === String(m.userId) || tAssigned === String(m.id) || (m.email && tEmail === m.email.toLowerCase().trim()))
-              );
-            if (isMatch) {
-              const obj = docToObj(t);
-              matchedTaskMap.set(String(obj.id || obj._id), obj);
-            }
+        if (memberProjectIds.length > 0) {
+          const projectTasks = await TaskModel.find({
+            projectId: { $in: memberProjectIds }
+          }).sort({ deadline: 1 }).lean();
+
+          for (const t of (projectTasks || [])) {
+            const obj = docToObj(t);
+            matchedTaskMap.set(String(obj.id || obj._id), obj);
           }
         }
 
