@@ -14,37 +14,37 @@ export const Navbar = ({
   const { isConnected } = useRealtime();
 
   return (
-    <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 shadow-md">
+    <header className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-bold text-base shadow-md">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center font-bold text-base shadow-sm">
             WCE
           </div>
           <div>
-            <div className="font-bold text-white text-base leading-tight flex items-center gap-2">
+            <div className="font-bold text-gray-900 text-base leading-tight flex items-center gap-2">
               <span>Smart Hackathon Team Finder</span>
               {isConnected && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800" title="Real-Time Sync Connected">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-600 border border-emerald-200" title="Real-Time Sync Connected">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Live
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-slate-400 font-medium">
+            <div className="text-[11px] text-gray-500 font-medium">
               Walchand College of Engineering, Sangli
             </div>
           </div>
         </div>
 
         {/* Center Nav tabs */}
-        <nav className="hidden md:flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl text-xs font-semibold">
+        <nav className="hidden md:flex items-center gap-1 bg-gray-100 border border-gray-200 p-1 rounded-xl text-xs font-semibold">
           <button
             onClick={() => onSelectTab('student')}
             className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
               currentTab === 'student'
                 ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             Student Dashboard
@@ -56,10 +56,10 @@ export const Navbar = ({
               className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 currentTab === 'leader'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              <Shield className="w-3.5 h-3.5 text-indigo-500" />
               <span>Team Leader Dashboard</span>
             </button>
           )}
@@ -69,7 +69,7 @@ export const Navbar = ({
             className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
               currentTab === 'projects'
                 ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             Browse Projects
@@ -83,21 +83,21 @@ export const Navbar = ({
               {/* My Profile Button */}
               <button
                 onClick={onOpenProfile}
-                className="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-slate-800 hover:border-slate-700"
+                className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer border border-gray-200 hover:border-gray-300"
               >
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
                   {user.fullName.charAt(0)}
                 </div>
                 <div className="hidden lg:block text-left text-xs">
-                  <div className="font-semibold text-white leading-none">{user.fullName}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{user.academicYear}</div>
+                  <div className="font-semibold text-gray-900 leading-none">{user.fullName}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{user.academicYear}</div>
                 </div>
               </button>
 
               <button
                 onClick={logout}
                 title="Sign Out"
-                className="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-2 text-gray-500 hover:text-rose-600 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -106,7 +106,7 @@ export const Navbar = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onOpenAuth('login')}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white"
+                className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:text-gray-900"
               >
                 Sign In
               </button>
@@ -122,25 +122,25 @@ export const Navbar = ({
       </div>
 
       {/* Mobile nav bar */}
-      <div className="md:hidden flex border-t border-slate-800 bg-slate-900 text-xs font-medium">
+      <div className="md:hidden flex border-t border-gray-200 bg-white text-xs font-medium">
         <button
           onClick={() => onSelectTab('student')}
-          className={`flex-1 py-2.5 text-center ${currentTab === 'student' ? 'text-indigo-400 font-bold bg-slate-950' : 'text-slate-400'}`}
+          className={`flex-1 py-2.5 text-center ${currentTab === 'student' ? 'text-indigo-600 font-bold bg-gray-50' : 'text-gray-500'}`}
         >
           Student Dashboard
         </button>
         {isTeamLeader && (
           <button
             onClick={() => onSelectTab('leader')}
-            className={`flex-1 py-2.5 text-center flex items-center justify-center gap-1 ${currentTab === 'leader' ? 'text-indigo-400 font-bold bg-slate-950' : 'text-slate-400'}`}
+            className={`flex-1 py-2.5 text-center flex items-center justify-center gap-1 ${currentTab === 'leader' ? 'text-indigo-600 font-bold bg-gray-50' : 'text-gray-500'}`}
           >
-            <Shield className="w-3.5 h-3.5 text-indigo-400" />
+            <Shield className="w-3.5 h-3.5 text-indigo-600" />
             <span>Leader</span>
           </button>
         )}
         <button
           onClick={() => onSelectTab('projects')}
-          className={`flex-1 py-2.5 text-center ${currentTab === 'projects' ? 'text-indigo-400 font-bold bg-slate-950' : 'text-slate-400'}`}
+          className={`flex-1 py-2.5 text-center ${currentTab === 'projects' ? 'text-indigo-600 font-bold bg-gray-50' : 'text-gray-500'}`}
         >
           Projects
         </button>

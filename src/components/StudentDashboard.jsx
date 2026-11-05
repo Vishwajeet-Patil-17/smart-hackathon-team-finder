@@ -16,6 +16,10 @@ import {
   Users,
   ArrowRight,
   Plus,
+  ChevronDown,
+  ChevronUp,
+  UserCheck,
+  Calendar,
 } from 'lucide-react';
 
 export const StudentDashboard = ({
@@ -33,6 +37,12 @@ export const StudentDashboard = ({
 
   // Peer eval modal state
   const [peerEvalTarget, setPeerEvalTarget] = useState(null);
+  const [expandedTasks, setExpandedTasks] = useState({});
+  const [selectedReliabilityIdx, setSelectedReliabilityIdx] = useState(0);
+
+  const toggleTaskExpand = (taskId) => {
+    setExpandedTasks(prev => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
 
   const fetchDashboard = async (silent = false) => {
     if (!user) {
@@ -58,234 +68,251 @@ export const StudentDashboard = ({
   useEffect(() => {
     if (!user) return;
 
-    // Listen to real-time events triggered from anywhere
     const unsubs = [
-      subscribe('task:created', () => fetchDashboard(true)),
-      subscribe('task:updated', () => fetchDashboard(true)),
-      subscribe('invitation:sent', () => fetchDashboard(true)),
-      subscribe('invitation:accepted', () => fetchDashboard(true)),
-      subscribe('invitation:rejected', () => fetchDashboard(true)),
-      subscribe('join_request:sent', () => fetchDashboard(true)),
-      subscribe('join_request:approved', () => fetchDashboard(true)),
-      subscribe('join_request:rejected', () => fetchDashboard(true)),
-      subscribe('project:updated', () => fetchDashboard(true)),
+      subscribe('invitation:sent', (data) => {
+        if (data.candidateId === user.id) {
+          fetchDashboard(true);
+          setActionFeedback({ type: 'info', message: 'You received a new team invitation!' });
+        }
+      }),
+      subscribe('task:created', (data) => {
+        if (data.assignedTo === user.id) {
+          fetchDashboard(true);
+          setActionFeedback({ type: 'info', message: `New task assigned to you: "${data.task?.title}"` });
+        }
+      }),
+      subscribe('task:status_updated', () => {
+        fetchDashboard(true);
+      }),
+      subscribe('task:updated', () => {
+        fetchDashboard(true);
+      }),
+      subscribe('invitation:responded', () => {
+        fetchDashboard(true);
+      }),
+      subscribe('project:completed', () => {
+        fetchDashboard(true);
+      }),
     ];
 
-    // Gentle background fallback polling every 6s
-    const pollInterval = setInterval(() => {
-      fetchDashboard(true);
-    }, 6000);
-
     return () => {
-      unsubs.forEach(u => u && u());
-      clearInterval(pollInterval);
+      unsubs.forEach(un => un && un());
     };
   }, [user, subscribe]);
 
-  const handleAcceptInvite = async (invId) => {
+  const handleRespondInvitation = async (invitationId, status) => {
     try {
-      await api.acceptInvitation(invId);
-      setActionFeedback({ type: 'success', message: 'Invitation accepted! You have joined the hackathon team.' });
-      await fetchDashboard();
+      await api.respondInvitation(invitationId, status);
+      setActionFeedback({
+        type: 'success',
+        message: `Invitation successfully ${status.toLowerCase()}ed!`,
+      });
+      fetchDashboard(true);
     } catch (err) {
-      setActionFeedback({ type: 'error', message: err.message || 'Failed to accept invitation.' });
-    }
-  };
-
-  const handleRejectInvite = async (invId) => {
-    try {
-      await api.rejectInvitation(invId);
-      setActionFeedback({ type: 'success', message: 'Invitation declined.' });
-      await fetchDashboard();
-    } catch (err) {
-      setActionFeedback({ type: 'error', message: err.message || 'Failed to reject invitation.' });
+      setActionFeedback({
+        type: 'error',
+        message: err.message || 'Failed to respond to invitation.',
+      });
     }
   };
 
   const handleTaskStatus = async (taskId, status) => {
     try {
       await api.updateTaskStatus(taskId, status);
-      await fetchDashboard();
+      fetchDashboard(true);
+      setActionFeedback({
+        type: 'success',
+        message: `Task marked as ${status}!`,
+      });
     } catch (err) {
-      setActionFeedback({ type: 'error', message: err.message || 'Failed to update task.' });
+      setActionFeedback({
+        type: 'error',
+        message: err.message || 'Failed to update task status.',
+      });
     }
   };
 
-  const handlePeerEvalSubmit = async (evalData) => {
-    await api.submitPeerEvaluation(evalData);
-    await fetchDashboard();
+  const handlePeerEvalSubmit = async (formData) => {
+    try {
+      await api.submitPeerEvaluation(formData);
+      setActionFeedback({
+        type: 'success',
+        message: 'Peer evaluation recorded securely.',
+      });
+      setPeerEvalTarget(null);
+      fetchDashboard(true);
+    } catch (err) {
+      setActionFeedback({
+        type: 'error',
+        message: err.message || 'Failed to submit peer evaluation.',
+      });
+    }
   };
 
   if (!user) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center max-w-xl mx-auto space-y-4 shadow-xl my-6">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto text-xl font-bold">
-          WCE
+      <div className="max-w-4xl mx-auto py-12 px-4 text-center space-y-6">
+        <div className="w-16 h-16 bg-indigo-50 border border-indigo-200 rounded-2xl flex items-center justify-center mx-auto text-indigo-600">
+          <Sparkles className="w-8 h-8" />
         </div>
-        <div className="space-y-1.5">
-          <h2 className="text-xl font-bold text-white tracking-tight">Smart Hackathon Team Finder</h2>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Walchand College of Engineering, Sangli. Sign in or register with your college email to discover projects, invite teammates, and track sprint deliverables.
-          </p>
-        </div>
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            onClick={() => onOpenAuth?.('login')}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-md transition-colors cursor-pointer"
-          >
-            Sign In with College Email
-          </button>
-          <button
-            onClick={() => onOpenAuth?.('register')}
-            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors cursor-pointer shadow-md"
-          >
-            Register Student Account
-          </button>
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900">Student Dashboard</h2>
+        <p className="text-gray-600 max-w-md mx-auto text-sm">
+          Sign in with your Walchand College of Engineering email to access your team invitations, assigned sprint tasks, and peer evaluations.
+        </p>
+        <button
+          onClick={onOpenAuth}
+          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+        >
+          Sign In / Register
+        </button>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] text-slate-400 text-sm">
-        <Clock className="w-5 h-5 animate-spin mr-2 text-indigo-500" />
-        Loading your student dashboard...
+      <div className="max-w-6xl mx-auto py-16 px-4 text-center space-y-3">
+        <div className="animate-spin w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full mx-auto" />
+        <p className="text-xs text-gray-500">Loading your student dashboard...</p>
       </div>
     );
   }
 
-  if (!dashboardData) {
-    return (
-      <div className="p-8 text-center text-slate-400 text-sm">
-        Unable to load student dashboard data. Please try signing in again.
-      </div>
-    );
-  }
+  if (!dashboardData) return null;
 
   const {
     profile,
     profileCompletionPercentage,
-    projectsCreated,
-    projectsJoined,
-    pendingInvitations,
+    projectsCreated = [],
+    projectsJoined = [],
+    pendingInvitations = [],
     sentJoinRequests = [],
-    recommendedProjects,
-    assignedTasks,
-    peerEvaluationsToSubmit,
-    reliabilityScores,
+    recommendedProjects = [],
+    assignedTasks = [],
+    peerEvaluationsToSubmit = [],
+    reliabilityScores = [],
   } = dashboardData;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 space-y-6 text-gray-800">
+      {/* Action Notification */}
       {actionFeedback && (
-        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium shadow-md transition-all ${
-          actionFeedback.type === 'success'
-            ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
-            : 'bg-rose-950/80 border-rose-800 text-rose-200'
-        }`}>
-          <div className="flex items-center gap-2">
-            <span>{actionFeedback.message}</span>
-          </div>
+        <div
+          className={`p-4 rounded-xl text-sm flex items-center justify-between border shadow-xs ${
+            actionFeedback.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : actionFeedback.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+          }`}
+        >
+          <span>{actionFeedback.message}</span>
           <button
             onClick={() => setActionFeedback(null)}
-            className="text-slate-400 hover:text-white px-2 py-0.5 rounded cursor-pointer"
+            className="text-xs opacity-75 hover:opacity-100 underline cursor-pointer ml-4"
           >
-            ✕
+            Dismiss
           </button>
         </div>
       )}
 
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-indigo-400 tracking-wider uppercase">
-              Walchand College of Engineering, Sangli • Student Hub
-            </span>
-            <h2 className="text-2xl font-bold tracking-tight text-white">
-              Welcome back, {profile.fullName}!
-            </h2>
-            <p className="text-xs text-slate-400">
-              {profile.academicYear} • {profile.department} • Availability: <span className="text-indigo-300 font-medium">{profile.availability}</span>
-            </p>
-          </div>
-
+      {/* Header Profile Summary */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenCreateProject}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/20 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Project</span>
-            </button>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Welcome, {profile.fullName}
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {profile.academicYear} • {profile.department}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500">
+            {profile.email} • Experience: <strong className="text-gray-700">{profile.experienceLevel}</strong>
+          </p>
+          <div className="flex flex-wrap gap-1.5 pt-2">
+            {(profile.skills || []).map((sk, idx) => {
+              const skillName = typeof sk === 'object' && sk !== null ? (sk.name || sk.skill || '') : String(sk);
+              const prof = typeof sk === 'object' && sk !== null ? sk.proficiency : '';
+              if (!skillName) return null;
+              return (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 bg-gray-100 text-gray-700 border border-gray-200 text-[11px] rounded-md font-mono inline-flex items-center gap-1"
+                >
+                  <span>{skillName}</span>
+                  {prof && <span className="text-[10px] text-gray-400">({prof})</span>}
+                </span>
+              );
+            })}
           </div>
         </div>
 
         {/* Profile Completion Bar */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Profile Completion:</span>
-            <span className="font-bold text-white">{profileCompletionPercentage}%</span>
+        <div className="w-full md:w-64 bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-2 shrink-0">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-600 font-medium">Profile Completeness</span>
+            <span className="font-bold text-indigo-600">{profileCompletionPercentage}%</span>
           </div>
-          <div className="w-48 bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
             <div
-              className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+              className="bg-indigo-600 h-full rounded-full transition-all duration-500"
               style={{ width: `${profileCompletionPercentage}%` }}
             />
           </div>
-          <span className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-gray-500">
             {profileCompletionPercentage === 100
-              ? 'Profile fully optimized for matching!'
-              : 'Add skills, roles, and bio to improve recommendation accuracy.'}
-          </span>
+              ? 'Complete profile maximizes matching accuracy!'
+              : 'Add bio, GitHub, ID card, and skills for optimal matchmaking.'}
+          </p>
         </div>
       </div>
 
-      {/* Pending Invitations Alert */}
+      {/* Pending Invitations Banner */}
       {pendingInvitations.length > 0 && (
-        <div className="bg-amber-950/30 border border-amber-800/50 rounded-2xl p-5 shadow-lg space-y-3">
-          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-            <Mail className="w-5 h-5 text-amber-400" />
-            <span>You have {pendingInvitations.length} Pending Project Invitation(s)</span>
+        <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-indigo-600" />
+            <h3 className="font-bold text-gray-900 text-base">
+              Pending Team Invitations ({pendingInvitations.length})
+            </h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {pendingInvitations.map(inv => (
               <div
                 key={inv.id}
-                className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-md space-y-2 text-xs"
+                className="bg-white border border-indigo-200 p-4 rounded-xl space-y-3 shadow-xs"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h5 className="font-bold text-white">{inv.projectName}</h5>
-                    <p className="text-[11px] text-slate-400">
-                      From: <strong className="text-slate-300">{inv.leaderName}</strong> ({inv.leaderEmail})
+                    <h4 className="font-bold text-gray-900 text-sm">{inv.projectName}</h4>
+                    <p className="text-xs text-indigo-600 font-medium mt-0.5">
+                      Proposed Role: <strong>{inv.proposedRole}</strong>
                     </p>
                   </div>
-                  <span className="px-2 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-lg text-[11px] font-semibold">
-                    Role: {inv.proposedRole}
+                  <span className="text-[10px] text-gray-500">
+                    Leader: {inv.leaderName}
                   </span>
                 </div>
 
                 {inv.message && (
-                  <p className="text-slate-400 italic bg-slate-950 p-2 rounded-lg border border-slate-800/80 text-[11px]">
+                  <p className="text-xs text-gray-700 italic bg-gray-50 p-2 rounded-lg border border-gray-200">
                     "{inv.message}"
                   </p>
                 )}
 
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button
-                    onClick={() => handleRejectInvite(inv.id)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-medium cursor-pointer"
+                    onClick={() => handleRespondInvitation(inv.id, 'Rejected')}
+                    className="px-3 py-1 bg-white hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg cursor-pointer border border-gray-300 transition-colors"
                   >
                     Decline
                   </button>
                   <button
-                    onClick={() => handleAcceptInvite(inv.id)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md flex items-center gap-1 cursor-pointer"
+                    onClick={() => handleRespondInvitation(inv.id, 'Accepted')}
+                    className="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-xs cursor-pointer transition-colors"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
                     Accept & Join Team
                   </button>
                 </div>
@@ -295,40 +322,40 @@ export const StudentDashboard = ({
         </div>
       )}
 
-      {/* Sent Join Requests Status */}
-      {sentJoinRequests.length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
+      {/* Sent Join Requests */}
+      {sentJoinRequests && sentJoinRequests.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="font-bold text-white text-sm flex items-center gap-2">
-              <Users className="w-4 h-4 text-indigo-400" />
+            <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-600" />
               <span>Your Sent Join Requests ({sentJoinRequests.length})</span>
             </h4>
-            <span className="text-[11px] text-slate-400">Status of your team applications</span>
+            <span className="text-[11px] text-gray-500">Status of your team applications</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sentJoinRequests.map(req => (
               <div
                 key={req.id}
-                className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5 text-xs flex flex-col justify-between"
+                className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-1.5 text-xs flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between gap-1">
-                    <span className="font-bold text-white leading-tight">{req.projectName}</span>
+                    <span className="font-bold text-gray-900 leading-tight">{req.projectName}</span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
                       req.status === 'Accepted'
-                        ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : req.status === 'Rejected'
-                        ? 'bg-rose-950 text-rose-300 border-rose-800'
-                        : 'bg-indigo-950 text-indigo-300 border-indigo-800'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                     }`}>
                       {req.status}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Applied Role: <strong className="text-slate-200">{req.proposedRole}</strong>
+                  <p className="text-[11px] text-gray-600 mt-1">
+                    Applied Role: <strong className="text-gray-800">{req.proposedRole}</strong>
                   </p>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-gray-500">
                     Leader: {req.leaderName}
                   </p>
                 </div>
@@ -343,87 +370,172 @@ export const StudentDashboard = ({
         {/* Left Column: Assigned Tasks & Peer Reviews & Recommendations */}
         <div className="lg:col-span-2 space-y-6">
           {/* Assigned Tasks */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-white text-base">Your Assigned Tasks</h3>
+                <Clock className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-gray-900 text-base">Your Assigned Tasks</h3>
               </div>
-              <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-medium">
                 {assignedTasks.filter(t => t.status !== 'Completed').length} Pending
               </span>
             </div>
 
             {assignedTasks.length === 0 ? (
-              <div className="p-6 text-center text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-xs">
+              <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-xs">
                 No tasks assigned to you right now. Join projects or coordinate with your team leader.
               </div>
             ) : (
-              <div className="space-y-2.5">
-                {assignedTasks.map(task => (
-                  <div
-                    key={task.id}
-                    className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs flex-wrap"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          task.priority === 'Urgent'
-                            ? 'bg-rose-950/60 text-rose-300 border-rose-800'
-                            : 'bg-blue-950/60 text-blue-300 border-blue-800'
-                        }`}>
-                          {task.priority}
-                        </span>
-                        <h5 className="font-semibold text-white">{task.title}</h5>
-                      </div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                        <span>Due: {new Date(task.deadline).toLocaleDateString()}</span>
-                        {task.isOverdue && (
-                          <span className="text-rose-400 font-bold flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" /> Overdue
-                          </span>
-                        )}
-                        {task.status === 'Completed' && (
-                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Finished
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              <div className="space-y-3">
+                {assignedTasks.map(task => {
+                  const isExpanded = Boolean(expandedTasks[task.id]);
 
-                    <div className="flex items-center gap-2">
-                      {task.status === 'Pending' && (
+                  const statusBadgeStyle =
+                    task.status === 'Completed'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : task.status === 'In Progress'
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200';
+
+                  const priorityBadgeStyle =
+                    task.priority === 'Urgent'
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : task.priority === 'High'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-gray-100 text-gray-700 border-gray-200';
+
+                  const deadlineFormatted = !isNaN(new Date(task.deadline).getTime())
+                    ? new Date(task.deadline).toLocaleDateString()
+                    : task.deadline;
+
+                  const assignedDateFormatted = task.createdAt && !isNaN(new Date(task.createdAt).getTime())
+                    ? new Date(task.createdAt).toLocaleDateString()
+                    : 'Recent';
+
+                  return (
+                    <div
+                      key={task.id}
+                      className="p-4 bg-gray-50/80 border border-gray-200 rounded-xl space-y-3 transition-colors hover:border-gray-300 text-xs shadow-2xs"
+                    >
+                      {/* Top Header Row */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${priorityBadgeStyle}`}>
+                              {task.priority} Priority
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusBadgeStyle}`}>
+                              {task.status}
+                            </span>
+                            {task.projectName && (
+                              <span className="text-[10px] bg-white text-gray-700 border border-gray-200 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                                <FolderGit2 className="w-3 h-3 text-indigo-600" />
+                                {task.projectName}
+                              </span>
+                            )}
+                          </div>
+                          <h5 className="font-semibold text-gray-900 text-sm leading-snug">{task.title}</h5>
+                        </div>
+
                         <button
-                          onClick={() => handleTaskStatus(task.id, 'In Progress')}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium cursor-pointer border border-slate-700"
+                          onClick={() => toggleTaskExpand(task.id)}
+                          className="p-1 hover:bg-white text-gray-400 hover:text-gray-700 rounded-lg transition-colors cursor-pointer shrink-0 border border-gray-200"
+                          title={isExpanded ? 'Collapse details' : 'Expand full details'}
                         >
-                          Start Task
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
+                      </div>
+
+                      {/* Task Description */}
+                      {task.description ? (
+                        <div className="text-gray-700 leading-relaxed text-xs bg-white p-3 rounded-lg border border-gray-200">
+                          <p className={isExpanded ? 'whitespace-pre-line' : 'line-clamp-2'}>
+                            {task.description}
+                          </p>
+                          {task.description.length > 100 && (
+                            <button
+                              onClick={() => toggleTaskExpand(task.id)}
+                              className="text-[11px] text-indigo-600 font-semibold hover:underline mt-1.5 inline-block cursor-pointer"
+                            >
+                              {isExpanded ? 'Show less' : 'Read full description...'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-gray-400 italic">No additional description provided.</div>
                       )}
-                      {task.status !== 'Completed' && (
-                        <button
-                          onClick={() => handleTaskStatus(task.id, 'Completed')}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-md cursor-pointer"
-                        >
-                          Mark Completed
-                        </button>
-                      )}
+
+                      {/* Detail Metadata Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-gray-500 pt-1">
+                        <div className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span>Assigned by: <strong className="text-gray-800">{task.assignedByName || task.createdByName || 'Team Leader'}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span>Assigned on: <strong className="text-gray-800">{assignedDateFormatted}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span>Deadline: <strong className="text-gray-800">{deadlineFormatted}</strong></span>
+                        </div>
+
+                        {task.isOverdue && (
+                          <div className="flex items-center gap-1 text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>⚠ OVERDUE — Deadline was {deadlineFormatted}</span>
+                          </div>
+                        )}
+
+                        {task.status === 'Completed' && (
+                          <div className="flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 w-fit">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>
+                              ✓ Completed {task.completedOnTime === false ? 'with delay' : 'on time'}
+                              {task.completedAt && !isNaN(new Date(task.completedAt).getTime())
+                                ? ` on ${new Date(task.completedAt).toLocaleDateString()}`
+                                : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status Action Buttons */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+                        {task.status === 'Pending' && (
+                          <button
+                            onClick={() => handleTaskStatus(task.id, 'In Progress')}
+                            className="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium cursor-pointer border border-gray-300 transition-colors"
+                          >
+                            Start Task (In Progress)
+                          </button>
+                        )}
+                        {task.status !== 'Completed' && (
+                          <button
+                            onClick={() => handleTaskStatus(task.id, 'Completed')}
+                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition-colors flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mark Completed</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Peer Evaluations to Submit */}
           {peerEvaluationsToSubmit.length > 0 && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-amber-400" />
-                  <h3 className="font-bold text-white text-base">Peer Evaluations</h3>
+                  <Star className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-bold text-gray-900 text-base">Peer Evaluations</h3>
                 </div>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-gray-500">
                   Strictly Confidential • No Self-Evaluation
                 </span>
               </div>
@@ -432,26 +544,35 @@ export const StudentDashboard = ({
                 {peerEvaluationsToSubmit.map((pe, idx) => (
                   <div
                     key={idx}
-                    className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between text-xs"
+                    className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-bold text-white">{pe.teammateName}</div>
-                      <div className="text-[11px] text-slate-400">{pe.teammateRole} • {pe.projectName}</div>
+                      <div className="font-bold text-gray-900">{pe.teammateName}</div>
+                      <div className="text-[11px] text-gray-500">{pe.teammateRole} • {pe.projectName}</div>
                     </div>
 
                     <div>
                       {pe.alreadySubmitted ? (
-                        <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" /> Submitted
                         </span>
-                      ) : (
-                        <button
-                          onClick={() => setPeerEvalTarget(pe)}
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-md cursor-pointer"
-                        >
-                          Evaluate Peer
-                        </button>
-                      )}
+                      ) : (() => {
+                        const relatedProj = (projectsJoined || []).find(p => String(p.id) === String(pe.projectId)) ||
+                                            (projectsCreated || []).find(p => String(p.id) === String(pe.projectId));
+                        const isCompleted = pe.isCompleted || (relatedProj && relatedProj.recruitmentStatus === 'Completed');
+                        return isCompleted ? (
+                          <button
+                            onClick={() => setPeerEvalTarget(pe)}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
+                          >
+                            Evaluate Peer
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-lg">
+                            Available after project completion
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -459,51 +580,46 @@ export const StudentDashboard = ({
             </div>
           )}
 
-          {/* Recommended Projects */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+          {/* Recommended Projects (Algorithmic Match) */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-white text-base">
-                  Recommended Projects for You
-                </h3>
+                <Sparkles className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-gray-900 text-base">Recommended Projects for You</h3>
               </div>
-              <span className="text-xs text-indigo-400 font-semibold bg-indigo-950/80 border border-indigo-800 px-2 py-0.5 rounded-full">
-                Deterministic Match Score
+              <span className="text-[11px] text-gray-500">
+                Formula: <code className="text-indigo-600 font-mono">0.50S + 0.25E + 0.25A</code>
               </span>
             </div>
 
             {recommendedProjects.length === 0 ? (
-              <div className="p-6 text-center text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-xs">
-                No open projects match your criteria at this moment.
+              <div className="p-6 text-center text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-xs">
+                No matching open projects right now. You can create your own team!
               </div>
             ) : (
               <div className="space-y-3">
                 {recommendedProjects.map(({ project, matchScore, suggestedRole }) => (
                   <div
                     key={project.id}
-                    className="p-4 bg-slate-950/60 hover:bg-slate-950/90 border border-slate-800 hover:border-slate-700 rounded-xl transition-all flex items-start justify-between gap-4 text-xs"
+                    className="p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between gap-4 text-xs hover:border-gray-300 transition-colors"
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-1.5 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">{project.name}</span>
-                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-medium">
-                          {project.domain}
-                        </span>
+                        <h4 className="font-bold text-gray-900 text-sm">{project.name}</h4>
                       </div>
-                      <p className="text-slate-400 line-clamp-2">{project.idea}</p>
-                      <div className="text-[11px] text-slate-400 pt-1">
-                        Suggested Role: <strong className="text-indigo-400">{suggestedRole}</strong> • Led by {project.leaderName}
+                      <p className="text-gray-600 line-clamp-2">{project.idea}</p>
+                      <div className="text-[11px] text-gray-500 pt-1">
+                        Suggested Role: <strong className="text-indigo-600">{suggestedRole}</strong> • Led by {project.leaderName}
                       </div>
                     </div>
 
                     <div className="text-right shrink-0 space-y-2">
-                      <div className="px-3 py-1 bg-indigo-950/80 border border-indigo-800 text-indigo-300 rounded-lg font-bold text-sm">
+                      <div className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg font-bold text-sm">
                         {matchScore}% Match
                       </div>
                       <button
                         onClick={() => setSelectedProject(project)}
-                        className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
                       >
                         <span>View Details</span>
                         <ArrowRight className="w-3 h-3" />
@@ -519,20 +635,20 @@ export const StudentDashboard = ({
         {/* Right Column: Projects Led/Joined & Reliability Card */}
         <div className="space-y-6">
           {/* Projects Led (Team Leader Controls) */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="font-bold text-white text-sm flex items-center gap-1.5">
-                <FolderGit2 className="w-4 h-4 text-indigo-400" />
+              <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                <FolderGit2 className="w-4 h-4 text-indigo-600" />
                 <span>Projects You Lead ({projectsCreated.length})</span>
               </h4>
             </div>
 
             {projectsCreated.length === 0 ? (
-              <div className="p-4 text-center text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-xs">
+              <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-xs">
                 You haven't created a project yet.
                 <button
                   onClick={onOpenCreateProject}
-                  className="mt-2 block mx-auto text-indigo-400 font-semibold hover:underline cursor-pointer"
+                  className="mt-2 block mx-auto text-indigo-600 font-semibold hover:underline cursor-pointer"
                 >
                   Create one now
                 </button>
@@ -542,17 +658,17 @@ export const StudentDashboard = ({
                 {projectsCreated.map(p => (
                   <div
                     key={p.id}
-                    className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 text-xs"
+                    className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2 text-xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-white">{p.name}</span>
-                      <span className="text-[10px] bg-slate-800 text-indigo-300 border border-slate-700 px-2 py-0.5 rounded font-medium">
+                      <span className="font-bold text-gray-900">{p.name}</span>
+                      <span className="text-[10px] bg-white text-indigo-700 border border-gray-200 px-2 py-0.5 rounded font-medium">
                         {p.teamMembers?.length || 0} / {p.totalTeamSize} Members
                       </span>
                     </div>
                     <button
                       onClick={() => onNavigateToLeader(p.id)}
-                      className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                      className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
                     >
                       <span>Open Team Leader Dashboard</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -564,14 +680,14 @@ export const StudentDashboard = ({
           </div>
 
           {/* Projects Joined */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-            <h4 className="font-bold text-white text-sm flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-emerald-400" />
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm space-y-3">
+            <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-emerald-600" />
               <span>Projects Joined ({projectsJoined.length})</span>
             </h4>
 
             {projectsJoined.length === 0 ? (
-              <div className="p-4 text-center text-slate-500 bg-slate-950/60 rounded-xl border border-dashed border-slate-800 text-xs">
+              <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-xs">
                 You haven't joined other teams yet. Check recommendations or browse projects!
               </div>
             ) : (
@@ -579,18 +695,18 @@ export const StudentDashboard = ({
                 {projectsJoined.map(p => (
                   <div
                     key={p.id}
-                    className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5 text-xs"
+                    className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-1.5 text-xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-white">{p.name}</span>
-                      <span className="text-[10px] text-slate-400">Led by {p.leaderName}</span>
+                      <span className="font-bold text-gray-900">{p.name}</span>
+                      <span className="text-[10px] text-gray-500">Led by {p.leaderName}</span>
                     </div>
-                    <div className="text-[11px] text-slate-300">
+                    <div className="text-[11px] text-gray-600">
                       Your Role: <strong>{p.teamMembers?.find(m => String(m.userId) === String(profile?.id || profile?._id) || (m.email && profile?.email && m.email.toLowerCase() === profile.email.toLowerCase()))?.role || 'Member'}</strong>
                     </div>
                     <button
                       onClick={() => setSelectedProject(p)}
-                      className="text-xs text-indigo-400 font-semibold hover:underline cursor-pointer"
+                      className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
                     >
                       View Team & Progress Details
                     </button>
@@ -601,11 +717,39 @@ export const StudentDashboard = ({
           </div>
 
           {/* Reliability Score Card */}
-          {reliabilityScores.length > 0 && (
-            <ReliabilityCard
-              reliability={reliabilityScores[0]}
-              studentName={profile.fullName}
-            />
+          {reliabilityScores && reliabilityScores.length > 0 && (
+            <div className="space-y-3">
+              {reliabilityScores.length > 1 && (
+                <div className="p-3 bg-white border border-gray-200 rounded-xl space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-gray-600 font-semibold">Select Project Reliability Score:</span>
+                    <span className="text-[10px] bg-gray-100 text-indigo-700 px-2 py-0.5 rounded font-mono">
+                      {reliabilityScores.length} Projects
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {reliabilityScores.map((score, idx) => (
+                      <button
+                        key={score.projectId || idx}
+                        onClick={() => setSelectedReliabilityIdx(idx)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border ${
+                          selectedReliabilityIdx === idx
+                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:text-gray-900'
+                        }`}
+                      >
+                        {score.projectName || `Project ${idx + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <ReliabilityCard
+                reliability={reliabilityScores[selectedReliabilityIdx] || reliabilityScores[0]}
+                studentName={profile.fullName}
+                compact={true}
+              />
+            </div>
           )}
         </div>
       </div>

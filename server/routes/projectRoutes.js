@@ -6,12 +6,8 @@ const router = Router();
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { domain, search, status } = req.query;
+    const { search, status } = req.query;
     let projects = await dbStore.getAllProjects();
-
-    if (domain && typeof domain === 'string' && domain !== 'All') {
-      projects = projects.filter(p => p.domain.toLowerCase() === domain.toLowerCase());
-    }
 
     if (status && typeof status === 'string' && status !== 'All') {
       projects = projects.filter(p => p.recruitmentStatus === status);
@@ -21,8 +17,8 @@ router.get('/', authenticate, async (req, res) => {
       const q = search.toLowerCase();
       projects = projects.filter(
         p => p.name.toLowerCase().includes(q) ||
-             p.domain.toLowerCase().includes(q) ||
              p.idea.toLowerCase().includes(q) ||
+             (p.problemStatement && p.problemStatement.toLowerCase().includes(q)) ||
              p.requiredSkills.some(s => (s.skill || '').toLowerCase().includes(q))
       );
     }
@@ -53,7 +49,6 @@ router.post('/', authenticate, async (req, res) => {
       idea,
       description,
       problemStatement,
-      domain,
       technicalApproach,
       requiredSkills,
       requiredRoles,
@@ -64,7 +59,7 @@ router.post('/', authenticate, async (req, res) => {
       expectedAvailability,
     } = req.body;
 
-    if (!name || !idea || !description || !problemStatement || !domain || !technicalApproach) {
+    if (!name || !idea || !description || !problemStatement || !technicalApproach) {
       res.status(400).json({ error: 'Please fill in all mandatory project definition fields.' });
       return;
     }
@@ -98,7 +93,6 @@ router.post('/', authenticate, async (req, res) => {
       idea: idea.trim(),
       description: description.trim(),
       problemStatement: problemStatement.trim(),
-      domain: domain.trim(),
       technicalApproach: technicalApproach.trim(),
       requiredSkills: Array.isArray(requiredSkills) ? requiredSkills : [],
       requiredRoles: Array.isArray(requiredRoles) ? requiredRoles : ['Full Stack Developer', 'UI/UX Designer'],
@@ -148,7 +142,6 @@ router.put('/:id', authenticate, async (req, res) => {
       idea,
       description,
       problemStatement,
-      domain,
       technicalApproach,
       requiredSkills,
       requiredRoles,
@@ -165,7 +158,6 @@ router.put('/:id', authenticate, async (req, res) => {
     if (idea) updates.idea = idea.trim();
     if (description) updates.description = description.trim();
     if (problemStatement) updates.problemStatement = problemStatement.trim();
-    if (domain) updates.domain = domain.trim();
     if (technicalApproach) updates.technicalApproach = technicalApproach.trim();
     if (requiredSkills && Array.isArray(requiredSkills)) updates.requiredSkills = requiredSkills;
     if (requiredRoles && Array.isArray(requiredRoles)) updates.requiredRoles = requiredRoles;

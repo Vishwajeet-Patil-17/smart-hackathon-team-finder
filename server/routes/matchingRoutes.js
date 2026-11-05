@@ -68,7 +68,7 @@ router.get('/:projectId/candidates', authenticate, async (req, res) => {
 
     res.status(200).json({
       recommendations,
-      formula: 'Match Score = 0.40S + 0.20E + 0.20D + 0.20A',
+      formula: 'Match Score = 0.50S + 0.25E + 0.25A',
       currentTeamSize,
       totalTeamSize: project.totalTeamSize,
     });

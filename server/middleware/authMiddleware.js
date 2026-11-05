@@ -5,7 +5,13 @@ let warnedMissingSecret = false;
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    if (!warnedMissingSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error(
+        '[CRITICAL SECURITY WARNING] JWT_SECRET environment variable is NOT set in production! ' +
+        'Tokens will be invalidated across service restarts on Render. ' +
+        'Please set JWT_SECRET in your Render dashboard environment variables.'
+      );
+    } else if (!warnedMissingSecret) {
       console.warn('[AI Studio] JWT_SECRET not set — using ephemeral development secret.');
       warnedMissingSecret = true;
     }

@@ -72,8 +72,31 @@ router.get('/student', authenticate, async (req, res) => {
 
     const sentJoinRequests = await dbStore.getJoinRequestsByCandidate(userId, userEmail);
 
-    const assignedTasks = await dbStore.getTasksByMember(userId, userEmail);
+    const rawAssignedTasks = await dbStore.getTasksByMember(userId, userEmail);
     const now = new Date();
+    const assignedTasks = (rawAssignedTasks || []).map(t => {
+      const proj = allProjects.find(p => String(p.id || p._id) === String(t.projectId || t.projectId?._id));
+      const deadlineDate = new Date(t.deadline);
+      const isOverdue = t.status !== 'Completed' && !isNaN(deadlineDate.getTime()) && deadlineDate < now;
+      return {
+        id: String(t.id || t._id),
+        projectId: t.projectId ? String(t.projectId._id || t.projectId) : '',
+        projectName: proj ? proj.name : (t.projectName || 'Team Project'),
+        title: t.title || 'Untitled Task',
+        description: t.description || '',
+        assignedTo: String(t.assignedTo || userId),
+        assignedToName: t.assignedToName || user.fullName,
+        createdBy: String(t.createdBy || proj?.leaderId || ''),
+        createdByName: t.createdByName || proj?.leaderName || 'Team Leader',
+        priority: t.priority || 'Medium',
+        deadline: t.deadline,
+        status: t.status || 'Pending',
+        isOverdue: Boolean(t.isOverdue || isOverdue),
+        completedAt: t.completedAt || null,
+        completedOnTime: t.completedOnTime ?? (t.completedAt && t.deadline ? new Date(t.completedAt) <= new Date(t.deadline) : null),
+        createdAt: t.createdAt || new Date().toISOString(),
+      };
+    });
     const upcomingDeadlines = assignedTasks
       .filter(t => t.status !== 'Completed' && new Date(t.deadline) >= now)
       .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
@@ -110,6 +133,8 @@ router.get('/student', authenticate, async (req, res) => {
         peerEvaluationsToSubmit.push({
           projectId: proj.id,
           projectName: proj.name,
+          projectStatus: proj.recruitmentStatus,
+          isCompleted: proj.recruitmentStatus === 'Completed',
           teammateId: teammate.userId,
           teammateName: teammate.fullName,
           teammateRole: teammate.role,
@@ -129,6 +154,7 @@ router.get('/student', authenticate, async (req, res) => {
         projPeerEvals,
         proj.recruitmentStatus === 'Completed'
       );
+      score.projectName = proj.name;
       reliabilityScores.push(score);
     }
 

@@ -2,7 +2,6 @@ import { WCE_EMAIL_REGEX, VALID_ACADEMIC_YEARS } from '../routes/authRoutes.js';
 import {
   calculateSkillMatch,
   calculateExperienceMatch,
-  calculateDomainMatch,
   calculateAvailabilityMatch,
   calculateCandidateMatch,
 } from '../services/matchingService.js';
@@ -174,15 +173,6 @@ export async function runAllTests() {
     `Exact: ${expMatchExact}, 2-tier gap: ${expMatchLower}`
   );
 
-  const domainScore = calculateDomainMatch('Campus Automation', 'Indoor campus wayfinding', ['Campus Automation']);
-  record(
-    'Matching Algorithm',
-    'Domain and interest match calculation',
-    domainScore >= 80,
-    'Domain match >= 80',
-    `Score: ${domainScore}`
-  );
-
   const availScore = calculateAvailabilityMatch('15-20 hrs/week', '15-20 hrs/week');
   record(
     'Matching Algorithm',
@@ -195,7 +185,7 @@ export async function runAllTests() {
   const fullMatch = calculateCandidateMatch(mockProject, mockCandidatePerfect);
   record(
     'Matching Algorithm',
-    'Overall Match Score adheres to 0.40S + 0.20E + 0.20D + 0.20A',
+    'Overall Match Score adheres to 0.50S + 0.25E + 0.25A',
     fullMatch.overallMatchScore >= 95 && fullMatch.suggestedRole === 'Frontend Developer',
     '>= 95% overall score and suggested Frontend Developer role',
     `Score: ${fullMatch.overallMatchScore}%, role: ${fullMatch.suggestedRole}`

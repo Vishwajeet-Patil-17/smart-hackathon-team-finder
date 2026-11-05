@@ -49,7 +49,7 @@ export const ProjectSchema = new Schema({
   idea: { type: String, required: true },
   description: { type: String, required: true },
   problemStatement: { type: String, required: true },
-  domain: { type: String, required: true },
+  domain: { type: String, trim: true },
   technicalApproach: { type: String, required: true },
   requiredSkills: [{
     skill: { type: String, required: true, trim: true },
@@ -117,6 +117,7 @@ export const TaskSchema = new Schema({
   assignedToEmail: { type: String, lowercase: true, trim: true },
   assignedToName: { type: String, trim: true },
   createdBy: { type: Schema.Types.Mixed, required: true },
+  createdByName: { type: String, trim: true },
   priority: {
     type: String,
     enum: ['Low', 'Medium', 'High', 'Urgent'],

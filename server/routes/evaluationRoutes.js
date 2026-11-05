@@ -27,6 +27,13 @@ router.post('/leader', authenticate, async (req, res) => {
       return;
     }
 
+    if (project.recruitmentStatus !== 'Completed') {
+      res.status(400).json({
+        error: 'Evaluations can only be submitted after the project is marked as Completed by the team leader.',
+      });
+      return;
+    }
+
     const userEmail = (req.user.email || '').toLowerCase().trim();
     const isLeader =
       String(project.leaderId) === String(leaderId) ||
@@ -88,6 +95,13 @@ router.post('/peer', authenticate, async (req, res) => {
     const project = await dbStore.findProjectById(projectId);
     if (!project) {
       res.status(404).json({ error: 'Project not found.' });
+      return;
+    }
+
+    if (project.recruitmentStatus !== 'Completed') {
+      res.status(400).json({
+        error: 'Evaluations can only be submitted after the project is marked as Completed by the team leader.',
+      });
       return;
     }
 

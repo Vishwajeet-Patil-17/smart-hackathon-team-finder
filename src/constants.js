@@ -79,15 +79,3 @@ export const POPULAR_ROLES = [
   'Mobile App Developer',
   'Embedded Systems Specialist',
 ];
-
-export const DOMAINS = [
-  'Artificial Intelligence',
-  'Robotics & Automation',
-  'Web & Cloud Systems',
-  'Healthcare & MedTech',
-  'Smart Agriculture',
-  'FinTech & Security',
-  'EdTech & Campus Automation',
-  'IoT & Smart Cities',
-  'Clean Energy & Sustainability',
-];

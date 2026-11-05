@@ -219,29 +219,29 @@ export const RealtimeProvider = ({ children }) => {
         {notifications.map(n => (
           <div
             key={n.id}
-            className="pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-3.5 shadow-2xl text-xs flex items-start gap-3 transform transition-all animate-in slide-in-from-bottom-3 duration-200"
+            className="pointer-events-auto bg-white/95 backdrop-blur-md border border-gray-200 rounded-xl p-3.5 shadow-lg text-xs flex items-start gap-3 transform transition-all animate-in slide-in-from-bottom-3 duration-200"
           >
-            <div className="p-1.5 rounded-lg bg-indigo-950/80 border border-indigo-700/60 text-indigo-400 mt-0.5 shrink-0">
-              {n.type === 'task' && <ClipboardList className="w-4 h-4 text-amber-400" />}
-              {n.type === 'invite' && <Mail className="w-4 h-4 text-indigo-400" />}
-              {n.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-              {n.type === 'chat' && <MessageSquare className="w-4 h-4 text-sky-400" />}
-              {!['task', 'invite', 'success', 'chat'].includes(n.type) && <Bell className="w-4 h-4 text-indigo-400" />}
+            <div className="p-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 mt-0.5 shrink-0">
+              {n.type === 'task' && <ClipboardList className="w-4 h-4 text-amber-500" />}
+              {n.type === 'invite' && <Mail className="w-4 h-4 text-indigo-600" />}
+              {n.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+              {n.type === 'chat' && <MessageSquare className="w-4 h-4 text-sky-500" />}
+              {!['task', 'invite', 'success', 'chat'].includes(n.type) && <Bell className="w-4 h-4 text-indigo-600" />}
             </div>
 
             <div className="flex-1 min-w-0 pr-1">
-              <div className="font-bold text-white text-xs flex items-center gap-1.5">
+              <div className="font-bold text-gray-900 text-xs flex items-center gap-1.5">
                 <span>{n.title}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
-              <p className="text-slate-300 text-[11px] mt-0.5 leading-relaxed line-clamp-2">
+              <p className="text-gray-600 text-[11px] mt-0.5 leading-relaxed line-clamp-2">
                 {n.message}
               </p>
             </div>
 
             <button
               onClick={() => removeNotification(n.id)}
-              className="text-slate-500 hover:text-slate-300 p-0.5 rounded cursor-pointer shrink-0"
+              className="text-gray-400 hover:text-gray-600 p-0.5 rounded cursor-pointer shrink-0"
               title="Dismiss"
             >
               <X className="w-3.5 h-3.5" />

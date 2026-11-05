@@ -9,21 +9,39 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     async function loadUser() {
       const storedToken = localStorage.getItem('wce_token');
       if (storedToken) {
         try {
           const res = await api.getMe();
-          setUser(res.user);
+          if (isMounted) {
+            setUser(res.user);
+          }
         } catch (e) {
+          console.warn('[AuthContext] Session token invalid or expired. Clearing stored credentials:', e?.message || e);
           localStorage.removeItem('wce_token');
-          setToken(null);
+          if (isMounted) {
+            setToken(null);
+            setUser(null);
+          }
+        }
+      } else {
+        if (isMounted) {
           setUser(null);
+          setToken(null);
         }
       }
-      setIsLoading(false);
+      if (isMounted) {
+        setIsLoading(false);
+      }
     }
+
     loadUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (email, pass) => {

@@ -8,10 +8,9 @@ const router = Router();
 router.post('/', authenticate, async (req, res) => {
   try {
     const { projectId, title, description, assignedTo, priority, deadline } = req.body;
-    const leaderId = req.user.id;
 
     if (!projectId || !title || !assignedTo || !deadline) {
-      res.status(400).json({ error: 'Please provide projectId, task title, assigned member, and deadline.' });
+      res.status(400).json({ error: 'Please provide projectId, title, assignedTo, and deadline.' });
       return;
     }
 
@@ -23,66 +22,57 @@ router.post('/', authenticate, async (req, res) => {
 
     const userEmail = (req.user.email || '').toLowerCase().trim();
     const isLeader =
-      Boolean(leaderId) && (
-        String(project.leaderId) === String(leaderId) ||
-        (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail)
-      );
+      String(project.leaderId) === String(req.user.id) ||
+      (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail);
 
     if (!isLeader) {
-      res.status(403).json({ error: 'Unauthorized: Only the project leader can create and assign tasks.' });
+      res.status(403).json({ error: 'Unauthorized: Only the project leader can assign tasks.' });
       return;
     }
 
-    const assignedStr = String(assignedTo).trim();
-    let assignedUser = await dbStore.findUserById(assignedStr);
+    const assignedUser = await dbStore.findUserById(assignedTo);
     if (!assignedUser) {
-      const matchedMember = project.teamMembers?.find(m =>
-        String(m.userId) === assignedStr || String(m.id) === assignedStr || String(m._id) === assignedStr ||
-        (m.email && m.email.toLowerCase() === assignedStr.toLowerCase())
-      );
-      if (matchedMember) {
-        assignedUser = await dbStore.findUserById(matchedMember.userId) || await dbStore.findUserByEmail(matchedMember.email);
-      }
+      res.status(404).json({ error: 'Assigned team member not found.' });
+      return;
     }
 
-    const isMember = (project.teamMembers || []).some(m =>
-      String(m.userId) === assignedStr ||
-      String(m.id) === assignedStr ||
-      String(m._id) === assignedStr ||
-      (assignedUser && (String(m.userId) === String(assignedUser.id) || (m.email && assignedUser.email && m.email.toLowerCase() === assignedUser.email.toLowerCase())))
-    );
+    const isMember =
+      String(project.leaderId) === String(assignedUser.id) ||
+      (project.leaderEmail && assignedUser.email && project.leaderEmail.toLowerCase().trim() === assignedUser.email.toLowerCase().trim()) ||
+      project.teamMembers?.some(m =>
+        String(m.userId) === String(assignedUser.id) ||
+        (m.email && assignedUser.email && m.email.toLowerCase().trim() === assignedUser.email.toLowerCase().trim())
+      );
 
     if (!isMember) {
-      res.status(400).json({ error: 'Assigned student must be a registered member of this project team.' });
+      res.status(400).json({ error: 'Tasks can only be assigned to existing team members of this project.' });
       return;
     }
 
-    const targetUserId = String(assignedUser ? (assignedUser.id || assignedUser._id || assignedStr) : assignedStr);
-    const targetUserEmail = (assignedUser?.email || '').toLowerCase().trim();
-
     const task = await dbStore.createTask({
-      projectId: String(project.id || project._id || projectId),
+      projectId,
       title: title.trim(),
       description: description ? description.trim() : '',
-      assignedTo: targetUserId,
-      assignedToEmail: targetUserEmail,
-      assignedToName: assignedUser ? assignedUser.fullName : (project.teamMembers?.find(m => String(m.userId) === targetUserId)?.fullName || 'Team Member'),
-      createdBy: String(leaderId),
+      assignedTo: assignedUser.id,
+      assignedToName: assignedUser.fullName,
+      assignedToEmail: assignedUser.email,
+      createdBy: String(project.leaderId || req.user.id),
+      createdByName: req.user.fullName || project.leaderName || 'Team Leader',
       priority: priority || 'Medium',
       deadline: new Date(deadline).toISOString(),
+      status: 'Pending',
+      completedOnTime: null,
     });
 
     broadcastEvent('task:created', {
       task,
-      projectId: task.projectId,
-      assignedTo: task.assignedTo,
-      assignedToEmail: task.assignedToEmail,
-      assignedToName: task.assignedToName,
-      leaderName: req.user.fullName,
+      projectId,
+      assignedTo: assignedUser.id,
+      assignedToEmail: assignedUser.email,
     });
 
     res.status(201).json({
-      message: 'Task assigned successfully.',
+      message: 'Task created and assigned successfully.',
       task,
     });
   } catch (err) {
@@ -102,7 +92,8 @@ router.get('/project/:projectId', authenticate, async (req, res) => {
     const userEmail = (req.user.email || '').toLowerCase().trim();
     const isMember =
       project.teamMembers?.some(m =>
-        String(m.userId) === String(userId) || (m.email && m.email.toLowerCase() === userEmail)
+        String(m.userId) === String(userId) ||
+        (m.email && m.email.toLowerCase().trim() === userEmail)
       ) ||
       String(project.leaderId) === String(userId) ||
       (project.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail);
@@ -185,7 +176,12 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const project = await dbStore.findProjectById(task.projectId);
-    if (String(project?.leaderId) !== String(req.user.id)) {
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+    const isLeader =
+      String(project?.leaderId) === String(req.user.id) ||
+      (project?.leaderEmail && project.leaderEmail.toLowerCase().trim() === userEmail);
+
+    if (!isLeader) {
       res.status(403).json({ error: 'Unauthorized: Only the project leader can edit task details.' });
       return;
     }
@@ -203,12 +199,21 @@ router.put('/:id', authenticate, async (req, res) => {
       if (assignedUser) {
         updates.assignedTo = String(assignedTo);
         updates.assignedToName = assignedUser.fullName;
+        updates.assignedToEmail = assignedUser.email;
       }
     }
 
     const updated = await dbStore.updateTask(task.id || task._id || req.params.id, updates);
+
+    broadcastEvent('task:updated', {
+      task: updated,
+      projectId: task.projectId,
+      assignedTo: updated.assignedTo,
+      status: updated.status,
+    });
+
     res.status(200).json({
-      message: 'Task updated.',
+      message: 'Task updated successfully.',
       task: updated,
     });
   } catch (err) {

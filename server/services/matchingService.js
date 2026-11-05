@@ -42,7 +42,7 @@ export function calculateSkillMatch(requiredSkills, candidateSkills) {
     }
   }
 
-  // Exact formula requested: (skills available from candidate / total skills) * 100
+  // Exact formula: (skills available from candidate / total skills) * 100
   const normalizedScore = (matchingSkills.length / requiredSkills.length) * 100;
   return {
     score: Math.min(100, Math.max(0, Math.round(normalizedScore * 10) / 10)),
@@ -65,38 +65,6 @@ export function calculateExperienceMatch(projectPreferred, candidateExperience) 
   if (diff === 1) return 75;
   if (diff === 2) return 50;
   return 25;
-}
-
-/**
- * Calculates deterministic Interest & Domain Match Score D (0 - 100)
- */
-export function calculateDomainMatch(projectDomain, projectIdea, candidateInterests) {
-  if (!candidateInterests || candidateInterests.length === 0) {
-    return 40;
-  }
-
-  const normDomain = normalizeText(projectDomain);
-  const normIdea = normalizeText(projectIdea);
-
-  let directDomainMatch = false;
-  let matchedInterestsCount = 0;
-
-  for (const interest of candidateInterests) {
-    const normInterest = normalizeText(interest);
-    if (normInterest === normDomain || normDomain.includes(normInterest) || normInterest.includes(normDomain)) {
-      directDomainMatch = true;
-      matchedInterestsCount++;
-    } else if (normIdea.includes(normInterest)) {
-      matchedInterestsCount++;
-    }
-  }
-
-  if (directDomainMatch) {
-    return Math.min(100, 80 + matchedInterestsCount * 10);
-  } else if (matchedInterestsCount > 0) {
-    return Math.min(85, 50 + matchedInterestsCount * 15);
-  }
-  return 45;
 }
 
 /**
@@ -162,7 +130,6 @@ export function generateMatchExplanation(
   overallScore,
   S,
   E,
-  D,
   A,
   matchingSkills,
   missingSkills,
@@ -181,17 +148,13 @@ export function generateMatchExplanation(
     parts.push('Candidate experience tier fully aligns with project demands.');
   }
 
-  if (D >= 75) {
-    parts.push('Demonstrated domain focus matches the project scope.');
-  }
-
   parts.push(`Recommended for role: "${suggestedRole}".`);
   return parts.join(' ');
 }
 
 /**
  * Deterministic Candidate Match Recommendation Engine
- * Match Score = 0.40S + 0.20E + 0.20D + 0.20A
+ * Match Score = 0.50S + 0.25E + 0.25A
  */
 export function calculateCandidateMatch(project, candidate, pendingInvitationIds = []) {
   const { score: S, matchingSkills, missingSkills } = calculateSkillMatch(
@@ -204,18 +167,12 @@ export function calculateCandidateMatch(project, candidate, pendingInvitationIds
     candidate.experienceLevel
   );
 
-  const D = calculateDomainMatch(
-    project.domain,
-    project.idea,
-    candidate.interests
-  );
-
   const A = calculateAvailabilityMatch(
     project.expectedAvailability,
     candidate.availability
   );
 
-  const rawScore = 0.4 * S + 0.2 * E + 0.2 * D + 0.2 * A;
+  const rawScore = 0.50 * S + 0.25 * E + 0.25 * A;
   const overallMatchScore = Math.min(100, Math.max(0, Math.round(rawScore * 10) / 10));
 
   const suggestedRole = suggestRole(
@@ -228,7 +185,6 @@ export function calculateCandidateMatch(project, candidate, pendingInvitationIds
     overallMatchScore,
     S,
     E,
-    D,
     A,
     matchingSkills,
     missingSkills,
@@ -240,7 +196,6 @@ export function calculateCandidateMatch(project, candidate, pendingInvitationIds
     overallMatchScore,
     skillMatchScore: S,
     experienceMatchScore: E,
-    domainMatchScore: D,
     availabilityMatchScore: A,
     matchingSkills,
     missingSkills,

@@ -67,32 +67,32 @@ export const TeamDiscussion = ({
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-[460px]">
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[460px]">
       {/* Header */}
-      <div className="bg-slate-950/80 border-b border-slate-800 p-3.5 flex items-center justify-between">
+      <div className="bg-gray-50 border-b border-gray-200 p-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-indigo-400" />
-          <h4 className="font-semibold text-white text-sm">
+          <MessageSquare className="w-4 h-4 text-indigo-600" />
+          <h4 className="font-semibold text-gray-900 text-sm">
             {projectName} Team Channel
           </h4>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="flex items-center gap-1.5 text-[11px] text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200 shadow-2xs">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>Members Only</span>
         </div>
       </div>
 
       {/* Messages Feed */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-950/40">
+      <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50/50">
         {isLoading && messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-xs text-slate-500">
+          <div className="flex items-center justify-center h-full text-xs text-gray-400">
             Loading team communication...
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 space-y-1">
-            <MessageSquare className="w-8 h-8 text-slate-600" />
-            <p className="text-xs font-medium text-slate-400">No messages in this project yet.</p>
-            <p className="text-[11px] text-slate-500">Start the conversation, coordinate milestones, or post sprint updates!</p>
+          <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-1">
+            <MessageSquare className="w-8 h-8 text-gray-300" />
+            <p className="text-xs font-medium text-gray-600">No messages in this project yet.</p>
+            <p className="text-[11px] text-gray-400">Start the conversation, coordinate milestones, or post sprint updates!</p>
           </div>
         ) : (
           messages.map(msg => {
@@ -103,19 +103,19 @@ export const TeamDiscussion = ({
                 key={msg.id}
                 className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
               >
-                <div className="flex items-center gap-1.5 mb-1 text-[11px] text-slate-400">
-                  <span className="font-semibold text-slate-300">{msg.authorName}</span>
-                  <span className="px-1.5 py-0.2 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded text-[10px]">
+                <div className="flex items-center gap-1.5 mb-1 text-[11px] text-gray-500">
+                  <span className="font-semibold text-gray-700">{msg.authorName}</span>
+                  <span className="px-1.5 py-0.2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-[10px]">
                     {msg.authorRole}
                   </span>
-                  <span className="text-slate-500">• {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-gray-400">• {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
 
                 <div
                   className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed ${
                     isMe
-                      ? 'bg-indigo-600 text-white rounded-tr-xs shadow-md'
-                      : 'bg-slate-800 text-slate-200 border border-slate-700/80 rounded-tl-xs shadow-md'
+                      ? 'bg-indigo-600 text-white rounded-tr-xs shadow-xs'
+                      : 'bg-white text-gray-800 border border-gray-200 rounded-tl-xs shadow-2xs'
                   }`}
                 >
                   {msg.content}
@@ -128,18 +128,18 @@ export const TeamDiscussion = ({
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="p-3 bg-slate-900 border-t border-slate-800 flex gap-2">
+      <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-200 flex gap-2">
         <input
           type="text"
           placeholder="Share progress, ask questions, or link resources..."
           value={newMsg}
           onChange={e => setNewMsg(e.target.value)}
-          className="flex-1 text-xs px-3 py-2 bg-slate-950 border border-slate-800 text-white placeholder:text-slate-600 rounded-lg focus:outline-hidden focus:border-indigo-500"
+          className="flex-1 text-xs px-3 py-2 bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
         />
         <button
           type="submit"
           disabled={!newMsg.trim() || isSending}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer shadow-md"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Send</span>

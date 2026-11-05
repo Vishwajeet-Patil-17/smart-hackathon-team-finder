@@ -9,9 +9,13 @@ export function calculateReliabilityScore(
   peerEvaluations = [],
   isProjectCompleted = false
 ) {
-  const memberTasks = tasks.filter(t => String(t.assignedTo) === String(userId) && String(t.projectId) === String(projectId));
-  const memberPeerEvals = peerEvaluations.filter(
-    e => String(e.evaluatedMemberId) === String(userId) && String(e.projectId) === String(projectId)
+  const memberTasks = tasks.filter(t =>
+    (String(t.assignedTo?._id || t.assignedTo) === String(userId)) &&
+    (String(t.projectId?._id || t.projectId) === String(projectId))
+  );
+  const memberPeerEvals = peerEvaluations.filter(e =>
+    (String(e.evaluatedMemberId?._id || e.evaluatedMemberId) === String(userId)) &&
+    (String(e.projectId?._id || e.projectId) === String(projectId))
   );
 
   const totalTasksAssigned = memberTasks.length;

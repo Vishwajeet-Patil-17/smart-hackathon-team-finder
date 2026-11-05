@@ -16,12 +16,26 @@ function MainAppContent() {
   const [currentTab, setCurrentTab] = useState('student');
   const [leaderProjectId, setLeaderProjectId] = useState('');
   const [isTeamLeader, setIsTeamLeader] = useState(false);
+  const [isServerSlow, setIsServerSlow] = useState(false);
 
   // Modal triggers
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+
+  // 10s timeout warning for Render free plan cold starts
+  useEffect(() => {
+    let timer;
+    if (authLoading) {
+      timer = setTimeout(() => {
+        setIsServerSlow(true);
+      }, 10000);
+    } else {
+      setIsServerSlow(false);
+    }
+    return () => clearTimeout(timer);
+  }, [authLoading]);
 
   useEffect(() => {
     let isMounted = true;
@@ -64,17 +78,34 @@ function MainAppContent() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-9 h-9 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <div className="text-xs text-slate-400 font-medium">Smart Hackathon Team Finder • Loading...</div>
+      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="w-9 h-9 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="text-xs text-gray-500 font-medium">Smart Hackathon Team Finder • Connecting to server...</div>
+
+          {isServerSlow && (
+            <div className="p-3.5 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs space-y-2.5 text-left shadow-md">
+              <p className="leading-relaxed">
+                Server response is taking longer than usual. Render free tier spins down inactive servers and cold starts take ~30–50 seconds.
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-sm transition-colors"
+                >
+                  Refresh Page
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+    <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
       <Navbar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}

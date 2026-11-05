@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../services/api.js';
-import { DOMAINS, POPULAR_ROLES, EXPERIENCE_LEVELS, PROFICIENCY_LEVELS } from '../constants.js';
+import { POPULAR_ROLES, EXPERIENCE_LEVELS, PROFICIENCY_LEVELS } from '../constants.js';
 import { Trash2, Rocket } from 'lucide-react';
 
 export const ProjectCreateModal = ({
@@ -12,7 +12,6 @@ export const ProjectCreateModal = ({
   const [idea, setIdea] = useState('');
   const [description, setDescription] = useState('');
   const [problemStatement, setProblemStatement] = useState('');
-  const [domain, setDomain] = useState(DOMAINS[0]);
   const [technicalApproach, setTechnicalApproach] = useState('');
   const [totalTeamSize, setTotalTeamSize] = useState(4);
   const [preferredExperienceLevel, setPreferredExperienceLevel] = useState('Intermediate');
@@ -89,7 +88,6 @@ export const ProjectCreateModal = ({
         idea,
         description,
         problemStatement,
-        domain,
         technicalApproach,
         requiredSkills,
         requiredRoles,
@@ -110,115 +108,100 @@ export const ProjectCreateModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-800 my-8 space-y-4 text-xs text-slate-200">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-gray-200 my-8 space-y-4 text-xs text-gray-800">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-start justify-between border-b border-gray-200 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-800/80 text-indigo-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center">
               <Rocket className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">
+              <h3 className="text-base font-bold text-gray-900">
                 Create New Hackathon Project
               </h3>
-              <p className="text-slate-400">
+              <p className="text-gray-500">
                 Define idea, technical requirements, and team roles for WCE Mini-Project II.
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 cursor-pointer">✕</button>
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-rose-950/40 border border-rose-800/60 text-rose-300 rounded-lg">
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg">
             {errorMsg}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
-          {/* Project Name & Domain */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-semibold text-slate-300 mb-1">Project Name *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Smart Campus Navigation"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full p-2.5 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-300 mb-1">Project Domain *</label>
-              <select
-                value={domain}
-                onChange={e => setDomain(e.target.value)}
-                className="w-full p-2.5 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
-              >
-                {DOMAINS.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
+          {/* Project Name */}
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1">Project Name *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Smart Campus Navigation"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-hidden"
+            />
           </div>
 
           {/* Project Idea & Problem Statement */}
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Project Idea (One-line summary) *</label>
+            <label className="block font-semibold text-gray-700 mb-1">Project Idea (One-line summary) *</label>
             <input
               type="text"
               required
               placeholder="e.g. Develop a navigation platform to help students locate classrooms and labs on campus."
               value={idea}
               onChange={e => setIdea(e.target.value)}
-              className="w-full p-2.5 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+              className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-hidden"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Problem Statement *</label>
+            <label className="block font-semibold text-gray-700 mb-1">Problem Statement *</label>
             <textarea
               rows={2}
               required
               placeholder="Explain the real-world problem students or society face that this project solves..."
               value={problemStatement}
               onChange={e => setProblemStatement(e.target.value)}
-              className="w-full p-2.5 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+              className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-hidden"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Detailed Description & Features *</label>
+            <label className="block font-semibold text-gray-700 mb-1">Detailed Description & Features *</label>
             <textarea
               rows={3}
               required
               placeholder="Elaborate on the modules, user personas, key functional deliverables..."
               value={description}
               onChange={e => setDescription(e.target.value)}
-              className="w-full p-2.5 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+              className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-hidden"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Technical Approach & Proposed Solution *</label>
+            <label className="block font-semibold text-gray-700 mb-1">Technical Approach & Proposed Solution *</label>
             <textarea
               rows={2}
               required
               placeholder="e.g. React frontend with SVG map rendering; Node.js Express backend with Dijkstra routing algorithms..."
               value={technicalApproach}
               onChange={e => setTechnicalApproach(e.target.value)}
-              className="w-full p-2.5 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden"
+              className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-hidden"
             />
           </div>
 
           {/* Required Skills with Mandatory Flag */}
-          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-200">Required Technical Skills *</span>
-              <span className="text-[11px] text-slate-400">Essential for matching algorithm</span>
+              <span className="font-semibold text-gray-800">Required Technical Skills *</span>
+              <span className="text-[11px] text-gray-500">Essential for matching algorithm</span>
             </div>
 
             <div className="flex gap-2 items-center flex-wrap">
@@ -227,23 +210,23 @@ export const ProjectCreateModal = ({
                 placeholder="Skill (e.g. React, Python)"
                 value={newSkill}
                 onChange={e => setNewSkill(e.target.value)}
-                className="flex-1 p-2 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg"
+                className="flex-1 p-2 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg"
               />
               <select
                 value={newProf}
                 onChange={e => setNewProf(e.target.value)}
-                className="p-2 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg"
+                className="p-2 bg-white border border-gray-300 text-gray-900 rounded-lg"
               >
                 {PROFICIENCY_LEVELS.map(p => (
-                  <option key={p} value={p}>{p}</option>
+                  <option key={p} value={p} className="bg-white text-gray-900">{p}</option>
                 ))}
               </select>
-              <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-300 cursor-pointer">
+              <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-700 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isMandatory}
                   onChange={e => setIsMandatory(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-gray-300 bg-white text-indigo-600 focus:ring-indigo-500"
                 />
                 Mandatory
               </label>
@@ -260,17 +243,17 @@ export const ProjectCreateModal = ({
               {requiredSkills.map((s, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-200 shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white border border-gray-200 text-gray-800 shadow-2xs"
                 >
                   <span className="font-medium">{s.skill}</span>
-                  <span className="text-[10px] text-slate-400">({s.minProficiency})</span>
+                  <span className="text-[10px] text-gray-500">({s.minProficiency})</span>
                   {s.isMandatory && (
-                    <span className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1 py-0.2 rounded font-bold">REQ</span>
+                    <span className="text-[9px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 py-0.2 rounded font-bold">REQ</span>
                   )}
                   <button
                     type="button"
                     onClick={() => handleRemoveSkill(idx)}
-                    className="text-slate-400 hover:text-rose-400"
+                    className="text-gray-400 hover:text-rose-600"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -280,10 +263,10 @@ export const ProjectCreateModal = ({
           </div>
 
           {/* Required Roles */}
-          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-200">Required Team Roles *</span>
-              <span className="text-[11px] text-slate-400">Used for Team-Balance Role Coverage</span>
+              <span className="font-semibold text-gray-800">Required Team Roles *</span>
+              <span className="text-[11px] text-gray-500">Used for Team-Balance Role Coverage</span>
             </div>
 
             <div className="flex gap-2">
@@ -292,7 +275,7 @@ export const ProjectCreateModal = ({
                 placeholder="Custom role name..."
                 value={newRole}
                 onChange={e => setNewRole(e.target.value)}
-                className="flex-1 p-2 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg"
+                className="flex-1 p-2 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg"
               />
               <button
                 type="button"
@@ -312,8 +295,8 @@ export const ProjectCreateModal = ({
                   onClick={() => handleAddRole(r)}
                   className={`px-2 py-0.5 rounded text-[11px] border cursor-pointer transition-colors ${
                     requiredRoles.includes(r)
-                      ? 'bg-indigo-950 border-indigo-700 text-indigo-300 font-semibold'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
                   {requiredRoles.includes(r) ? '✓ ' : '+ '}
@@ -326,13 +309,13 @@ export const ProjectCreateModal = ({
               {requiredRoles.map(r => (
                 <span
                   key={r}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-200 font-medium shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white border border-gray-200 text-gray-800 font-medium shadow-2xs"
                 >
                   <span>{r}</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveRole(r)}
-                    className="text-slate-400 hover:text-rose-400"
+                    className="text-gray-400 hover:text-rose-600"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -344,7 +327,7 @@ export const ProjectCreateModal = ({
           {/* Configuration Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Total Team Size (2-10) *</label>
+              <label className="block font-semibold text-gray-700 mb-1">Total Team Size (2-10) *</label>
               <input
                 type="number"
                 min={2}
@@ -352,75 +335,75 @@ export const ProjectCreateModal = ({
                 required
                 value={totalTeamSize}
                 onChange={e => setTotalTeamSize(Number(e.target.value))}
-                className="w-full p-2 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg"
+                className="w-full p-2 bg-white border border-gray-300 text-gray-900 rounded-lg"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Preferred Experience</label>
+              <label className="block font-semibold text-gray-700 mb-1">Preferred Experience</label>
               <select
                 value={preferredExperienceLevel}
                 onChange={e => setPreferredExperienceLevel(e.target.value)}
-                className="w-full p-2 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg"
+                className="w-full p-2 bg-white border border-gray-300 text-gray-900 rounded-lg"
               >
                 {EXPERIENCE_LEVELS.map(l => (
-                  <option key={l} value={l}>{l}</option>
+                  <option key={l} value={l} className="bg-white text-gray-900">{l}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Expected Availability</label>
+              <label className="block font-semibold text-gray-700 mb-1">Expected Availability</label>
               <select
                 value={expectedAvailability}
                 onChange={e => setExpectedAvailability(e.target.value)}
-                className="w-full p-2 bg-slate-950 border border-slate-800 text-slate-100 rounded-lg"
+                className="w-full p-2 bg-white border border-gray-300 text-gray-900 rounded-lg"
               >
-                <option value="10-15 hrs/week">10-15 hrs/week</option>
-                <option value="15-20 hrs/week">15-20 hrs/week</option>
-                <option value="20+ hrs/week">20+ hrs/week</option>
-                <option value="Weekends Only">Weekends Only</option>
-                <option value="Full Hackathon Sprint">Full Hackathon Sprint</option>
+                <option value="10-15 hrs/week" className="bg-white text-gray-900">10-15 hrs/week</option>
+                <option value="15-20 hrs/week" className="bg-white text-gray-900">15-20 hrs/week</option>
+                <option value="20+ hrs/week" className="bg-white text-gray-900">20+ hrs/week</option>
+                <option value="Weekends Only" className="bg-white text-gray-900">Weekends Only</option>
+                <option value="Full Hackathon Sprint" className="bg-white text-gray-900">Full Hackathon Sprint</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Member Responsibilities</label>
+              <label className="block font-semibold text-gray-700 mb-1">Member Responsibilities</label>
               <textarea
                 rows={2}
                 placeholder="Outline expectations for contributors..."
                 value={memberResponsibilities}
                 onChange={e => setMemberResponsibilities(e.target.value)}
-                className="w-full p-2 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg"
+                className="w-full p-2 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Sprint Timeline & Milestones</label>
+              <label className="block font-semibold text-gray-700 mb-1">Sprint Timeline & Milestones</label>
               <textarea
                 rows={2}
                 placeholder="e.g. Week 1: Wireframing; Week 2: APIs; Week 3: Integration; Week 4: Testing"
                 value={timeline}
                 onChange={e => setTimeline(e.target.value)}
-                className="w-full p-2 bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg"
+                className="w-full p-2 bg-white border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-medium text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              className="px-4 py-2 font-medium text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-sm disabled:opacity-50 cursor-pointer transition-colors"
+              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg shadow-xs disabled:opacity-50 cursor-pointer transition-colors"
             >
               {isSubmitting ? 'Creating Project...' : 'Publish Project & Open Recruitment'}
             </button>
