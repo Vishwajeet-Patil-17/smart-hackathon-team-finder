@@ -4,6 +4,8 @@ import { getDatabaseStatus } from '../db/connection.js';
 import { getCloudinaryStatus } from '../services/cloudinaryService.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 
+import { dbStore } from '../db/store.js';
+
 const router = Router();
 
 router.get('/status', authenticate, async (req, res) => {
@@ -53,6 +55,19 @@ router.get('/tests', authenticate, async (req, res) => {
     res.status(200).json(report);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/clear-database', async (req, res) => {
+  try {
+    await dbStore.clearAllData();
+    res.status(200).json({
+      success: true,
+      message: 'All entries across all database collections cleared successfully. Schemas preserved.',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -6,13 +6,13 @@ let dbAuthError = null;
 
 export async function connectDB() {
   mongoose.set('bufferCommands', false);
-  let uri = (process.env.MONGODB_URI || '').trim();
+  let uri = (process.env.MONGODB_URI || process.env.MONGO_URL || '').trim();
   if ((uri.startsWith('"') && uri.endsWith('"')) || (uri.startsWith("'") && uri.endsWith("'"))) {
     uri = uri.slice(1, -1).trim();
   }
 
   if (!uri || uri.includes('<username>') || uri.includes('<db_username>') || uri.includes('YOUR_MONGODB_URI')) {
-    console.log('[Database] No external MONGODB_URI configured. Running in High-Reliability Local Store mode.');
+    console.log('[Database] No external MONGODB_URI or MONGO_URL configured. Running in High-Reliability Local Store mode.');
     connectionMode = 'memory-store';
     isConnected = true;
     dbAuthError = null;
@@ -21,8 +21,9 @@ export async function connectDB() {
 
   try {
     const connectOptions = {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 15000,
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+      maxPoolSize: 10,
     };
     if (!uri.includes('authSource=')) {
       connectOptions.authSource = 'admin';

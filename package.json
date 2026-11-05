@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "start": "node server.js",
     "test": "node server/tests/runTests.js",
-    "lint": "vite build"
+    "lint": "vite build",
+    "clear-db": "node server/scripts/clearDatabase.js"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

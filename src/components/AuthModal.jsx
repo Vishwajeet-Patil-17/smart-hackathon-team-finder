@@ -22,22 +22,19 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [academicYear, setAcademicYear] = useState('Third Year');
   const [experienceLevel, setExperienceLevel] = useState('Intermediate');
   const [availability, setAvailability] = useState('15-20 hrs/week');
-  const [bio, setBio] = useState('Walchand College engineering student and active hackathon participant.');
+  const [bio, setBio] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [relevantExperience, setRelevantExperience] = useState('');
-  const [interestsStr, setInterestsStr] = useState('Campus Automation, Web3, FinTech');
-  const [preferredRolesStr, setPreferredRolesStr] = useState('Frontend Developer, UI/UX Designer');
+  const [interestsStr, setInterestsStr] = useState('');
+  const [preferredRolesStr, setPreferredRolesStr] = useState('');
 
   // ID Card file state
   const [idCardFile, setIdCardFile] = useState(null);
   const [idCardPreview, setIdCardPreview] = useState(null);
 
   // Technical skills
-  const [skills, setSkills] = useState([
-    { name: 'React', proficiency: 'Intermediate' },
-    { name: 'JavaScript', proficiency: 'Advanced' },
-  ]);
+  const [skills, setSkills] = useState([]);
   const [skillInput, setSkillInput] = useState('');
   const [profInput, setProfInput] = useState('Intermediate');
 
@@ -232,36 +229,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
             >
               {isSubmitting ? 'Authenticating with server...' : 'Sign In to Student Dashboard'}
             </button>
-
-            <div className="pt-3 border-t border-gray-200 space-y-1.5">
-              <p className="text-[11px] text-gray-500 font-medium">Quick Sign In (1-Click Fill):</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('ndpawar1511@gmail.com');
-                    setLoginPassword('Password@123');
-                  }}
-                  className="p-2 bg-gray-50 hover:bg-gray-100 text-left border border-gray-200 hover:border-indigo-400 rounded-lg cursor-pointer transition-colors"
-                >
-                  <div className="text-xs font-semibold text-gray-900">ND Pawar</div>
-                  <div className="text-[10px] text-indigo-600 truncate">ndpawar1511@gmail.com</div>
-                  <div className="text-[10px] text-gray-400">Pass: Password@123</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginEmail('vishwajeet.patil@walchandsangli.ac.in');
-                    setLoginPassword('Password@123');
-                  }}
-                  className="p-2 bg-gray-50 hover:bg-gray-100 text-left border border-gray-200 hover:border-indigo-400 rounded-lg cursor-pointer transition-colors"
-                >
-                  <div className="text-xs font-semibold text-gray-900">Vishwajeet Patil</div>
-                  <div className="text-[10px] text-indigo-600 truncate">vishwajeet.patil@...</div>
-                  <div className="text-[10px] text-gray-400">Pass: Password@123</div>
-                </button>
-              </div>
-            </div>
           </form>
         )}
 
