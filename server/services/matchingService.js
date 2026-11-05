@@ -28,22 +28,27 @@ export function calculateSkillMatch(requiredSkills, candidateSkills) {
   const missingSkills = [];
 
   for (const req of requiredSkills) {
-    const reqNormalized = normalizeText(req.skill);
-    const matched = (candidateSkills || []).find(
-      s => normalizeText(s.name) === reqNormalized ||
-           reqNormalized.includes(normalizeText(s.name)) ||
-           normalizeText(s.name).includes(reqNormalized)
-    );
+    const reqSkillName = typeof req === 'string' ? req : (req?.skill || req?.name || '');
+    const reqNormalized = normalizeText(reqSkillName);
+    if (!reqNormalized) continue;
+
+    const matched = (candidateSkills || []).find(s => {
+      const sName = typeof s === 'string' ? s : (s?.name || s?.skill || '');
+      const sNorm = normalizeText(sName);
+      if (!sNorm) return false;
+      return sNorm === reqNormalized || reqNormalized.includes(sNorm) || sNorm.includes(reqNormalized);
+    });
 
     if (matched) {
-      matchingSkills.push(req.skill);
+      matchingSkills.push(reqSkillName);
     } else {
-      missingSkills.push(req.skill);
+      missingSkills.push(reqSkillName);
     }
   }
 
   // Exact formula: (skills available from candidate / total skills) * 100
-  const normalizedScore = (matchingSkills.length / requiredSkills.length) * 100;
+  const totalReq = requiredSkills.length || 1;
+  const normalizedScore = (matchingSkills.length / totalReq) * 100;
   return {
     score: Math.min(100, Math.max(0, Math.round(normalizedScore * 10) / 10)),
     matchingSkills,
@@ -201,6 +206,6 @@ export function calculateCandidateMatch(project, candidate, pendingInvitationIds
     missingSkills,
     suggestedRole,
     explanation,
-    hasPendingInvitation: pendingInvitationIds.includes(candidate.id),
+    hasPendingInvitation: (pendingInvitationIds || []).map(id => String(id?._id || id || '')).includes(String(candidate?.id || candidate?._id || '')),
   };
 }

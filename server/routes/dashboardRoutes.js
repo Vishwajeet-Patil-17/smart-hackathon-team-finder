@@ -8,12 +8,15 @@ import { calculateReliabilityScore } from '../services/reliabilityService.js';
 const router = Router();
 
 function sanitizeUser(u) {
+  if (!u) return null;
+  const uid = String(u.id || u._id || '');
   return {
-    id: u.id,
-    fullName: u.fullName,
-    email: u.email,
-    department: u.department,
-    academicYear: u.academicYear,
+    id: uid,
+    _id: uid,
+    fullName: u.fullName || 'Student',
+    email: u.email || '',
+    department: u.department || 'Engineering',
+    academicYear: u.academicYear || 'Third Year',
     skills: u.skills || [],
     experienceLevel: u.experienceLevel || 'Intermediate',
     interests: u.interests || [],
@@ -179,30 +182,66 @@ router.get('/student', authenticate, async (req, res) => {
 router.get('/leader/:projectId', authenticate, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const project = await dbStore.findProjectById(projectId);
+    let project = await dbStore.findProjectById(projectId);
+
+    const userId = req.user?.id ? String(req.user.id) : (req.user?._id ? String(req.user._id) : '');
+    const userEmail = (req.user?.email || '').toLowerCase().trim();
+
+    if (!project) {
+      // If projectId is 'auto' or 'current' or wasn't found by raw id, search by leader
+      const allProjects = await dbStore.getAllProjects();
+      project = allProjects.find(p => {
+        const pId = String(p.id || p._id || '');
+        if (pId === String(projectId)) return true;
+        if (projectId === 'auto' || projectId === 'current' || projectId === 'default') {
+          const lId = String(p.leaderId?._id || p.leaderId || '');
+          const lEmail = (p.leaderEmail || '').toLowerCase().trim();
+          const isTeamLead = (p.teamMembers || []).some(m => {
+            const mRole = (m.role || '').toLowerCase();
+            const mUid = String(m.userId?._id || m.userId || m.id || '');
+            const mEmail = (m.email || '').toLowerCase().trim();
+            return (mRole.includes('leader') || mRole.includes('lead')) &&
+              ((userId && mUid === userId) || (userEmail && mEmail === userEmail));
+          });
+          return (Boolean(userId) && lId === userId) || (Boolean(userEmail) && lEmail === userEmail) || isTeamLead;
+        }
+        return false;
+      });
+    }
+
     if (!project) {
       res.status(404).json({ error: 'Project not found.' });
       return;
     }
 
     const projId = String(project.id || project._id || projectId);
-    const userId = req.user?.id ? String(req.user.id) : (req.user?._id ? String(req.user._id) : '');
-    const userEmail = (req.user?.email || '').toLowerCase().trim();
     const leaderIdStr = project.leaderId
       ? String(typeof project.leaderId === 'object' ? (project.leaderId._id ?? project.leaderId.id ?? project.leaderId) : project.leaderId)
       : '';
     const leaderEmailStr = (project.leaderEmail || '').toLowerCase().trim();
 
+    const isMemberLeader = (project.teamMembers || []).some(m => {
+      const mRole = (m.role || '').toLowerCase();
+      const mUserId = String(m.userId?._id || m.userId || m.id || '');
+      const mEmail = (m.email || '').toLowerCase().trim();
+      const isRoleLeader = mRole.includes('leader') || mRole.includes('lead');
+      return isRoleLeader && (
+        (Boolean(userId) && mUserId === userId) ||
+        (Boolean(userEmail) && mEmail === userEmail)
+      );
+    });
+
     const isLeader =
       (Boolean(userId) && Boolean(leaderIdStr) && leaderIdStr === userId) ||
-      (Boolean(userEmail) && Boolean(leaderEmailStr) && leaderEmailStr === userEmail);
+      (Boolean(userEmail) && Boolean(leaderEmailStr) && leaderEmailStr === userEmail) ||
+      isMemberLeader;
 
     if (!isLeader) {
       res.status(403).json({ error: 'Access Denied: Only the team leader of this project can access the leader dashboard.' });
       return;
     }
 
-    // Execute all sub-queries in parallel for instantaneous load times
+    // Execute all sub-queries in parallel with safe error fallbacks
     const [
       allUsers,
       invitations,
@@ -212,25 +251,25 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
       leaderEvaluations,
       peerEvaluations
     ] = await Promise.all([
-      dbStore.getAllUsers(),
-      dbStore.getInvitationsByProject(projId),
-      dbStore.getJoinRequestsByProject(projId),
-      dbStore.getJoinRequestsForLeader(userId, userEmail),
-      dbStore.getTasksByProject(projId),
-      dbStore.getLeaderEvaluations(projId),
-      dbStore.getPeerEvaluationsByProject(projId),
+      dbStore.getAllUsers().catch(e => { console.warn('[Leader Dashboard] getAllUsers fallback:', e.message); return []; }),
+      dbStore.getInvitationsByProject(projId).catch(e => { console.warn('[Leader Dashboard] getInvitations fallback:', e.message); return []; }),
+      dbStore.getJoinRequestsByProject(projId).catch(e => { console.warn('[Leader Dashboard] getJoinRequests fallback:', e.message); return []; }),
+      dbStore.getJoinRequestsForLeader(userId, userEmail).catch(e => { console.warn('[Leader Dashboard] getJoinRequestsForLeader fallback:', e.message); return []; }),
+      dbStore.getTasksByProject(projId).catch(e => { console.warn('[Leader Dashboard] getTasks fallback:', e.message); return []; }),
+      dbStore.getLeaderEvaluations(projId).catch(e => { console.warn('[Leader Dashboard] getLeaderEvaluations fallback:', e.message); return []; }),
+      dbStore.getPeerEvaluationsByProject(projId).catch(e => { console.warn('[Leader Dashboard] getPeerEvaluations fallback:', e.message); return []; }),
     ]);
 
-    const activeInvitations = invitations.filter(i => i.status === 'Pending');
-    const pendingCandidateIds = activeInvitations.map(i => i.candidateId);
+    const activeInvitations = (invitations || []).filter(i => i.status === 'Pending');
+    const pendingCandidateIds = activeInvitations.map(i => String(i.candidateId?._id || i.candidateId || ''));
 
     const combinedRequestsMap = new Map();
-    for (const r of projectJoinRequests) {
+    for (const r of (projectJoinRequests || [])) {
       const rId = String(r.id || r._id || '');
       if (rId) combinedRequestsMap.set(rId, { ...r, id: rId, _id: rId });
     }
-    for (const r of leaderJoinRequests) {
-      if (String(r.projectId) === projId) {
+    for (const r of (leaderJoinRequests || [])) {
+      if (String(r.projectId?._id || r.projectId || '') === projId) {
         const rId = String(r.id || r._id || '');
         if (rId) combinedRequestsMap.set(rId, { ...r, id: rId, _id: rId });
       }
@@ -238,45 +277,92 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     const allProjectJoinRequests = Array.from(combinedRequestsMap.values());
     const pendingJoinRequests = allProjectJoinRequests.filter(r => r.status === 'Pending');
 
-    const candidates = allUsers.map(sanitizeUser);
-    const teamMembers = project.teamMembers || [];
+    const candidates = (allUsers || []).map(sanitizeUser).filter(Boolean);
+    const teamMembers = (project.teamMembers || []).map(m => {
+      const mId = String(m.userId?._id || m.userId || m.id || m._id || '');
+      const fName = m.fullName || m.name || 'Team Member';
+      return {
+        ...m,
+        userId: mId,
+        id: mId,
+        _id: mId,
+        fullName: fName,
+        name: fName,
+        role: m.role || 'Member',
+      };
+    });
     const currentTeamSize = teamMembers.length;
-    const requiredTeamSize = project.totalTeamSize;
+    const requiredTeamSize = project.totalTeamSize || 4;
     const isTeamFull = currentTeamSize >= requiredTeamSize;
 
-    const teamMemberIds = new Set(teamMembers.map(m => String(m.userId || m.id || m._id)));
+    const teamMemberIds = new Set(teamMembers.map(m => String(m.userId)));
     if (leaderIdStr) teamMemberIds.add(leaderIdStr);
+    if (userId) teamMemberIds.add(userId);
 
-    const eligibleCandidates = candidates.filter(c => !teamMemberIds.has(String(c.id)));
+    const eligibleCandidates = candidates.filter(c => c && c.id && !teamMemberIds.has(String(c.id)));
     const candidateRecommendations = !isTeamFull && project.recruitmentStatus === 'Open'
       ? eligibleCandidates
           .map(c => calculateCandidateMatch(project, c, pendingCandidateIds))
+          .filter(Boolean)
           .sort((a, b) => b.overallMatchScore - a.overallMatchScore)
           .slice(0, 8)
       : [];
 
-    const teamBalance = analyzeTeamBalance(project, candidates, pendingCandidateIds);
+    let teamBalance;
+    try {
+      teamBalance = analyzeTeamBalance(project, candidates, pendingCandidateIds);
+    } catch (tbErr) {
+      console.warn('[Leader Dashboard] analyzeTeamBalance fallback:', tbErr.message);
+      teamBalance = {
+        totalRequiredRoles: (project.requiredRoles || []).length,
+        coveredRolesCount: 0,
+        roleCoveragePercentage: 0,
+        coveredRoles: [],
+        missingRoles: project.requiredRoles || [],
+        totalRequiredSkills: (project.requiredSkills || []).length,
+        coveredSkillsCount: 0,
+        skillCoveragePercentage: 0,
+        coveredSkills: [],
+        missingSkills: (project.requiredSkills || []).map(s => typeof s === 'string' ? s : (s.skill || s.name || '')),
+        rolesNeedingMembers: [],
+        recommendedCandidatesForMissingRoles: [],
+      };
+    }
 
-    const overdueTasks = tasks.filter(t => t.isOverdue);
-    const completedTasks = tasks.filter(t => t.status === 'Completed');
+    const overdueTasks = (tasks || []).filter(t => t.isOverdue);
+    const completedTasks = (tasks || []).filter(t => t.status === 'Completed');
     const taskCompletionPercentage =
-      tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
+      (tasks || []).length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
 
     const memberProgress = teamMembers.map(m => {
-      const memberTasks = tasks.filter(t => t.assignedTo === m.userId);
+      const mId = String(m.userId);
+      const memberTasks = (tasks || []).filter(t => String(t.assignedTo?._id || t.assignedTo || '') === mId);
       const memberDone = memberTasks.filter(t => t.status === 'Completed');
       const completionPercentage =
         memberTasks.length > 0 ? Math.round((memberDone.length / memberTasks.length) * 100) : 0;
-      const reliabilityScore = calculateReliabilityScore(
-        m.userId,
-        project.id,
-        tasks,
-        peerEvaluations,
-        project.recruitmentStatus === 'Completed'
-      );
+      
+      let reliabilityScore;
+      try {
+        reliabilityScore = calculateReliabilityScore(
+          mId,
+          projId,
+          tasks,
+          peerEvaluations,
+          project.recruitmentStatus === 'Completed'
+        );
+      } catch (relErr) {
+        reliabilityScore = {
+          userId: mId,
+          projectId: projId,
+          overallScore: null,
+          isInsufficientData: true,
+          insufficientReason: 'Calculating scores...',
+          components: {},
+        };
+      }
 
       return {
-        memberId: m.userId,
+        memberId: mId,
         memberName: m.fullName,
         role: m.role,
         assignedTasksCount: memberTasks.length,
@@ -287,13 +373,14 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     });
 
     const peerEvaluationSummaries = teamMembers.map(m => {
-      const received = peerEvaluations.filter(pe => pe.evaluatedMemberId === m.userId);
+      const mId = String(m.userId);
+      const received = (peerEvaluations || []).filter(pe => String(pe.evaluatedMemberId?._id || pe.evaluatedMemberId || '') === mId);
       const avg = received.length > 0
-        ? Math.round((received.reduce((acc, cur) => acc + cur.averageRating, 0) / received.length) * 10) / 10
+        ? Math.round((received.reduce((acc, cur) => acc + (cur.averageRating || 0), 0) / received.length) * 10) / 10
         : 0;
 
       return {
-        memberId: m.userId,
+        memberId: mId,
         memberName: m.fullName,
         role: m.role,
         evaluationsReceived: received.length,
@@ -302,7 +389,11 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     });
 
     res.status(200).json({
-      project,
+      project: {
+        ...project,
+        id: projId,
+        _id: projId,
+      },
       teamMembers,
       currentTeamSize,
       requiredTeamSize,
@@ -312,15 +403,16 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
       activeInvitations,
       pendingJoinRequests,
       allJoinRequests: allProjectJoinRequests,
-      tasks,
+      tasks: (tasks || []).map(t => ({ ...t, id: String(t.id || t._id || '') })),
       overdueTasks,
       taskCompletionPercentage,
       memberProgress,
-      leaderEvaluations,
+      leaderEvaluations: leaderEvaluations || [],
       peerEvaluationSummaries,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Leader Dashboard Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to retrieve leader dashboard data.' });
   }
 });
 

@@ -48,11 +48,20 @@ function MainAppContent() {
         const res = await api.getProjects();
         const allProjects = res.projects || [];
         const userEmail = (user.email || '').toLowerCase().trim();
-        const userId = user.id ? String(user.id) : '';
-        const leads = allProjects.some(
-          p => (userId && String(p.leaderId) === userId) ||
-               (p.leaderEmail && userEmail && p.leaderEmail.toLowerCase().trim() === userEmail)
-        );
+        const userId = user.id ? String(user.id) : (user._id ? String(user._id) : '');
+        const leads = allProjects.some(p => {
+          const pLeaderId = p.leaderId ? String(typeof p.leaderId === 'object' ? (p.leaderId._id ?? p.leaderId.id ?? p.leaderId) : p.leaderId) : '';
+          const pLeaderEmail = (p.leaderEmail || '').toLowerCase().trim();
+          const isMemberLeader = Array.isArray(p.teamMembers) && p.teamMembers.some(m => {
+            const mId = m.userId ? String(typeof m.userId === 'object' ? (m.userId._id ?? m.userId.id ?? m.userId) : m.userId) : '';
+            const mEmail = (m.email || '').toLowerCase().trim();
+            const isRoleLeader = (m.role || '').toLowerCase().includes('leader');
+            return isRoleLeader && ((Boolean(userId) && mId === userId) || (Boolean(userEmail) && mEmail === userEmail));
+          });
+          return (Boolean(userId) && Boolean(pLeaderId) && pLeaderId === userId) ||
+                 (Boolean(userEmail) && Boolean(pLeaderEmail) && pLeaderEmail === userEmail) ||
+                 isMemberLeader;
+        });
         if (isMounted) setIsTeamLeader(leads);
       } catch {
         if (isMounted) setIsTeamLeader(false);

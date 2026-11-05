@@ -196,8 +196,16 @@ export const LeaderDashboard = ({
       const led = allProjects.filter(p => {
         const pLeaderId = p.leaderId ? String(typeof p.leaderId === 'object' ? (p.leaderId._id ?? p.leaderId.id ?? p.leaderId) : p.leaderId) : '';
         const pLeaderEmail = (p.leaderEmail || '').toLowerCase().trim();
+        const isMemberLeader = Array.isArray(p.teamMembers) && p.teamMembers.some(m => {
+          const mId = m.userId ? String(typeof m.userId === 'object' ? (m.userId._id ?? m.userId.id ?? m.userId) : m.userId) : '';
+          const mEmail = (m.email || '').toLowerCase().trim();
+          const isRoleLeader = (m.role || '').toLowerCase().includes('leader');
+          return isRoleLeader && ((Boolean(userId) && mId === userId) || (Boolean(userEmail) && mEmail === userEmail));
+        });
+
         return (Boolean(userId) && Boolean(pLeaderId) && pLeaderId === userId) ||
-               (Boolean(userEmail) && Boolean(pLeaderEmail) && pLeaderEmail === userEmail);
+               (Boolean(userEmail) && Boolean(pLeaderEmail) && pLeaderEmail === userEmail) ||
+               isMemberLeader;
       });
 
       setProjectsLed(led);
@@ -839,24 +847,61 @@ export const LeaderDashboard = ({
   // 4. Loading fallback if no data could be loaded
   if (!dashboardData) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500 text-sm gap-3">
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500 text-sm gap-4 p-6">
         {actionFeedback && actionFeedback.type === 'error' ? (
-          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-5 rounded-xl max-w-md text-center text-xs space-y-3">
-            <p className="font-bold">{actionFeedback.message}</p>
-            {onNavigateToStudent && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-6 rounded-2xl max-w-md text-center text-xs space-y-4 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-rose-900 mb-1">Unable to Load Dashboard</p>
+              <p className="text-rose-700 leading-relaxed">{actionFeedback.message}</p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
               <button
-                onClick={onNavigateToStudent}
-                className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-lg text-xs font-medium cursor-pointer"
+                type="button"
+                onClick={() => {
+                  setActionFeedback(null);
+                  if (activeProjectId) {
+                    fetchDashboardData(activeProjectId);
+                  } else {
+                    fetchProjects();
+                  }
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
               >
-                Return to Student Dashboard
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry</span>
               </button>
-            )}
+              {onNavigateToStudent && (
+                <button
+                  type="button"
+                  onClick={onNavigateToStudent}
+                  className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 rounded-xl text-xs font-medium cursor-pointer shadow-xs transition-colors"
+                >
+                  Return to Student Dashboard
+                </button>
+              )}
+            </div>
           </div>
         ) : (
-          <>
-            <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
-            <span>Loading Team Leader dashboard...</span>
-          </>
+          <div className="flex flex-col items-center gap-3">
+            <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
+            <span className="font-medium text-gray-700">Loading Team Leader dashboard...</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (activeProjectId) {
+                  fetchDashboardData(activeProjectId);
+                } else {
+                  fetchProjects();
+                }
+              }}
+              className="mt-2 text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline cursor-pointer"
+            >
+              Taking too long? Click here to refresh
+            </button>
+          </div>
         )}
       </div>
     );
@@ -1698,41 +1743,49 @@ export const LeaderDashboard = ({
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {memberProgress.map(mp => (
-              <div key={mp.memberId} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center shadow-xs">
-                      {mp.memberName.charAt(0)}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900 text-base">{mp.memberName}</h4>
-                      <p className="text-xs text-gray-500">Role: <span className="font-medium text-gray-700">{mp.role}</span></p>
-                    </div>
-                  </div>
+            {memberProgress.map(mp => {
+              const mName = mp.memberName || mp.name || 'Team Member';
+              const mInitial = (mName || 'M').charAt(0);
+              const isNotCurrentUser = String(mp.memberId) !== String(user?.id || user?._id || '');
+              const isProjectCompleted = (project?.recruitmentStatus || '') === 'Completed';
 
-                  {mp.memberId !== user?.id && (
-                    project.recruitmentStatus === 'Completed' ? (
-                      <button
-                        onClick={() => setEvalModalTarget({ userId: mp.memberId, fullName: mp.memberName, role: mp.role })}
-                        className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
-                      >
-                        Submit / Update Leader Evaluation
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-xl font-medium">
-                        Evaluations are available only after the project is marked as completed by the team leader.
-                      </span>
-                    )
-                  )}
-                </div>
+              return (
+                <div key={mp.memberId} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center shadow-xs">
+                        {mInitial}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-base">{mName}</h4>
+                        <p className="text-xs text-gray-500">Role: <span className="font-medium text-gray-700">{mp.role || 'Member'}</span></p>
+                      </div>
+                    </div>
+
+                    {isNotCurrentUser && (
+                      isProjectCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => setEvalModalTarget({ userId: mp.memberId, fullName: mName, role: mp.role })}
+                          className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Submit / Update Leader Evaluation
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-xl font-medium">
+                          Evaluations are available only after the project is marked as completed by the team leader.
+                        </span>
+                      )
+                    )}
+                  </div>
 
                 <ReliabilityCard
                   reliability={mp.reliabilityScore}
                   studentName={mp.memberName}
                 />
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       )}

@@ -50,7 +50,7 @@ export const Navbar = ({
             Student Dashboard
           </button>
 
-          {isTeamLeader && (
+          {Boolean(user || isTeamLeader) && (
             <button
               onClick={() => onSelectTab('leader')}
               className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -129,7 +129,7 @@ export const Navbar = ({
         >
           Student Dashboard
         </button>
-        {isTeamLeader && (
+        {Boolean(user || isTeamLeader) && (
           <button
             onClick={() => onSelectTab('leader')}
             className={`flex-1 py-2.5 text-center flex items-center justify-center gap-1 ${currentTab === 'leader' ? 'text-indigo-600 font-bold bg-gray-50' : 'text-gray-500'}`}

@@ -46,10 +46,12 @@ export function analyzeTeamBalance(
   // 2. Analyze Skill Coverage across all team members
   const memberSkillsSet = new Set();
   for (const member of currentMembers) {
-    const userProfile = allCandidates.find(c => c.id === member.userId);
+    const mIdStr = String(member.userId?._id || member.userId || member.id || member._id || '');
+    const userProfile = allCandidates.find(c => String(c.id || c._id || '') === mIdStr);
     if (userProfile && userProfile.skills) {
       for (const s of userProfile.skills) {
-        memberSkillsSet.add((s.name || '').toLowerCase().trim());
+        const sName = typeof s === 'string' ? s : (s?.name || s?.skill || '');
+        if (sName) memberSkillsSet.add(sName.toLowerCase().trim());
       }
     }
   }
@@ -58,14 +60,16 @@ export function analyzeTeamBalance(
   const missingSkills = [];
 
   for (const req of requiredSkills) {
-    const reqNorm = (req.skill || '').toLowerCase().trim();
+    const reqSkillName = typeof req === 'string' ? req : (req?.skill || req?.name || '');
+    const reqNorm = reqSkillName.toLowerCase().trim();
+    if (!reqNorm) continue;
     const isCovered = Array.from(memberSkillsSet).some(
       s => s === reqNorm || s.includes(reqNorm) || reqNorm.includes(s)
     );
     if (isCovered) {
-      coveredSkills.push(req.skill);
+      coveredSkills.push(reqSkillName);
     } else {
-      missingSkills.push(req.skill);
+      missingSkills.push(reqSkillName);
     }
   }
 
@@ -83,9 +87,13 @@ export function analyzeTeamBalance(
   }
 
   // 4. Recommend eligible candidates tailored for missing roles
+  const leaderIdStr = String(project.leaderId?._id || project.leaderId || '');
+  const memberIdSet = new Set(currentMembers.map(m => String(m.userId?._id || m.userId || m.id || m._id || '')));
+  if (leaderIdStr) memberIdSet.add(leaderIdStr);
+
   const eligibleCandidates = allCandidates.filter(c => {
-    if (c.id === project.leaderId) return false;
-    if (currentMembers.some(m => m.userId === c.id)) return false;
+    const cId = String(c?.id || c?._id || '');
+    if (!cId || memberIdSet.has(cId)) return false;
     return true;
   });
 
@@ -96,14 +104,18 @@ export function analyzeTeamBalance(
       candPrefRolesNorm.some(pr => pr.includes(normalizeRole(mr)) || normalizeRole(mr).includes(pr))
     );
 
-    const candSkillsNorm = (candidate.skills || []).map(s => (s.name || '').toLowerCase().trim());
+    const candSkillsNorm = (candidate.skills || []).map(s => {
+      const sName = typeof s === 'string' ? s : (s?.name || s?.skill || '');
+      return sName.toLowerCase().trim();
+    }).filter(Boolean);
+
     const hasMissingSkill = missingSkills.some(ms =>
       candSkillsNorm.some(cs => cs.includes(ms.toLowerCase()) || ms.toLowerCase().includes(cs))
     );
 
     if (hasMissingRolePreference || hasMissingSkill || missingRoles.length === 0) {
       const match = calculateCandidateMatch(project, candidate, pendingCandidateIds);
-      recommendedCandidates.push(match);
+      if (match) recommendedCandidates.push(match);
     }
   }
 

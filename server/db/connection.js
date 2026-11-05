@@ -21,8 +21,8 @@ export async function connectDB() {
 
   try {
     const connectOptions = {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
       maxPoolSize: 10,
     };
     if (!uri.includes('authSource=')) {

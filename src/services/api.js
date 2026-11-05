@@ -167,6 +167,13 @@ export const api = {
     });
   },
 
+  async respondInvitation(invitationId, status) {
+    const action = String(status).toLowerCase().includes('accept') ? 'accept' : 'reject';
+    return request(`/invitations/${invitationId}/${action}`, {
+      method: 'POST',
+    });
+  },
+
   async sendJoinRequest(requestData) {
     return request('/invitations/join-request', {
       method: 'POST',

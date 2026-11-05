@@ -33,6 +33,49 @@ function docToObj(doc) {
     obj.id = strId;
     obj._id = strId;
   }
+  if (obj.leaderId !== undefined && obj.leaderId !== null) {
+    obj.leaderId = typeof obj.leaderId === 'object'
+      ? (obj.leaderId._id ? obj.leaderId._id.toString() : (obj.leaderId.id ? obj.leaderId.id.toString() : String(obj.leaderId)))
+      : String(obj.leaderId);
+  }
+  if (Array.isArray(obj.teamMembers)) {
+    obj.teamMembers = obj.teamMembers.map(m => {
+      const uId = String(m.userId?._id || m.userId || m.id || m._id || '');
+      const fName = m.fullName || m.name || 'Team Member';
+      return {
+        ...m,
+        userId: uId,
+        id: uId,
+        _id: uId,
+        fullName: fName,
+        name: fName,
+        role: m.role || 'Member',
+        email: m.email || '',
+        department: m.department || '',
+        academicYear: m.academicYear || '',
+        joinedAt: m.joinedAt || new Date().toISOString(),
+      };
+    });
+  }
+  if (Array.isArray(obj.skills)) {
+    obj.skills = obj.skills.map(s => {
+      if (typeof s === 'string') return { name: s, proficiency: 'Intermediate' };
+      return {
+        name: s?.name || s?.skill || 'Skill',
+        proficiency: s?.proficiency || s?.minProficiency || 'Intermediate',
+      };
+    });
+  }
+  if (Array.isArray(obj.requiredSkills)) {
+    obj.requiredSkills = obj.requiredSkills.map(s => {
+      if (typeof s === 'string') return { skill: s, minProficiency: 'Intermediate', isMandatory: true };
+      return {
+        skill: s?.skill || s?.name || 'Skill',
+        minProficiency: s?.minProficiency || s?.proficiency || 'Intermediate',
+        isMandatory: s?.isMandatory !== false,
+      };
+    });
+  }
   return obj;
 }
 

@@ -20,11 +20,13 @@ export const CandidateMatchCard = ({
     hasPendingInvitation,
   } = recommendation;
 
+  const candidateName = candidate?.fullName || 'Student Candidate';
+  const firstName = candidateName.split(' ')[0] || 'Candidate';
   const [isInviting, setIsInviting] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [roleInput, setRoleInput] = useState(suggestedRole);
   const [messageInput, setMessageInput] = useState(
-    `Hi ${candidate.fullName.split(' ')[0]}! Your skillset matches our project requirements well. Would you like to join as our ${suggestedRole}?`
+    `Hi ${firstName}! Your skillset matches our project requirements well. Would you like to join as our ${suggestedRole}?`
   );
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -40,7 +42,7 @@ export const CandidateMatchCard = ({
     setIsInviting(true);
     setErrorMsg('');
     try {
-      await onInvite(candidate.id, roleInput, messageInput);
+      await onInvite(candidate?.id || candidate?._id, roleInput, messageInput);
       setShowInviteModal(false);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to send invitation.');
@@ -56,13 +58,13 @@ export const CandidateMatchCard = ({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
-              {candidate.fullName.charAt(0)}
+              {candidateName.charAt(0)}
             </div>
             <div>
               <h4 className="font-semibold text-gray-900 text-base flex items-center gap-2">
-                {candidate.fullName}
+                {candidateName}
                 <span className="text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full border border-gray-200">
-                  {candidate.academicYear}
+                  {candidate.academicYear || 'Third Year'}
                 </span>
               </h4>
               <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
