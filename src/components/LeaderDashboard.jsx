@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useRealtime } from '../context/RealtimeContext.jsx';
 import { api } from '../services/api.js';
@@ -19,7 +19,56 @@ import {
   Check,
   AlertTriangle,
   RefreshCw,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ArrowRight,
+  Rocket,
+  CheckCircle2,
 } from 'lucide-react';
+
+const CACHE_PREFIX = 'smart_hackathon_leader_cache_';
+
+const getCachedDashboard = (projId) => {
+  if (!projId || typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${CACHE_PREFIX}${projId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const setCachedDashboard = (projId, data) => {
+  if (!projId || !data || typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(`${CACHE_PREFIX}${projId}`, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Cache write failed:', e);
+  }
+};
+
+const POPULAR_SKILL_PRESETS = [
+  'React',
+  'Node.js',
+  'MongoDB',
+  'TypeScript',
+  'Python',
+  'Docker',
+  'Tailwind CSS',
+  'FastAPI',
+  'Express.js',
+  'UI/UX Design',
+];
+
+const POPULAR_ROLE_PRESETS = [
+  'Frontend Developer',
+  'Backend Developer',
+  'Full Stack Developer',
+  'UI/UX Designer',
+  'DevOps Engineer',
+  'ML / AI Engineer',
+];
 
 export const LeaderDashboard = ({
   initialProjectId,
@@ -30,16 +79,84 @@ export const LeaderDashboard = ({
   const { user } = useAuth();
   const [projectsLed, setProjectsLed] = useState([]);
   const [activeProjectId, setActiveProjectId] = useState(initialProjectId || '');
-  const [dashboardData, setDashboardData] = useState(null);
-  const [isLoading, setIsLoading] = useState(Boolean(user));
-  const [activeTab, setActiveTab] = useState('balance');
-  const [actionFeedback, setActionFeedback] = useState(null); // { type: 'success' | 'error', message: string }
+  
+  // Instant display from cache if available
+  const [dashboardData, setDashboardData] = useState(() => getCachedDashboard(initialProjectId));
+  const [isLoading, setIsLoading] = useState(!dashboardData && Boolean(user));
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(dashboardData ? new Date() : null);
 
-  // Evaluation modal state
+  const [activeTab, setActiveTab] = useState('balance');
+  const [actionFeedback, setActionFeedback] = useState(null);
+
+  // Evaluation and Profile modals
   const [evalModalTarget, setEvalModalTarget] = useState(null);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
 
-  const fetchProjects = async () => {
+  // Inline project creation state
+  const [showInlineCreate, setShowInlineCreate] = useState(false);
+  const [isSubmittingProject, setIsSubmittingProject] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [newProjectForm, setNewProjectForm] = useState({
+    name: '',
+    idea: '',
+    description: '',
+    problemStatement: '',
+    technicalApproach: '',
+    totalTeamSize: 4,
+    preferredExperienceLevel: 'Intermediate',
+    timeline: '4-Week Hackathon Sprint',
+    expectedAvailability: '15-20 hrs/week',
+    skills: [
+      { skill: 'React', minProficiency: 'Intermediate', isMandatory: true },
+      { skill: 'Node.js', minProficiency: 'Intermediate', isMandatory: true },
+      { skill: 'MongoDB', minProficiency: 'Intermediate', isMandatory: true },
+    ],
+    roles: ['Frontend Developer', 'Backend Developer', 'UI/UX Designer'],
+  });
+  const [customSkillName, setCustomSkillName] = useState('');
+  const [customSkillProf, setCustomSkillProf] = useState('Intermediate');
+  const [customRoleName, setCustomRoleName] = useState('');
+
+  const fetchDashboardData = useCallback(async (projId, silent = false) => {
+    if (!projId) {
+      if (!silent) setIsLoading(false);
+      return;
+    }
+
+    const cached = getCachedDashboard(projId);
+    if (cached && !dashboardData) {
+      setDashboardData(cached);
+      setIsLoading(false);
+      setIsSyncing(true);
+    } else if (!silent && !dashboardData) {
+      setIsLoading(true);
+    } else {
+      setIsSyncing(true);
+    }
+
+    try {
+      const data = await api.getLeaderDashboard(projId);
+      setDashboardData(data);
+      setCachedDashboard(projId, data);
+      setLastSyncTime(new Date());
+      setActionFeedback(null);
+    } catch (e) {
+      console.warn('Failed to fetch leader dashboard:', e);
+      if (!silent) {
+        if (!cached) setDashboardData(null);
+        setActionFeedback({
+          type: 'error',
+          message: e.message || 'Access Denied: Only the team leader of this project can view this dashboard.',
+        });
+      }
+    } finally {
+      if (!silent) setIsLoading(false);
+      setIsSyncing(false);
+    }
+  }, [dashboardData]);
+
+  const fetchProjects = useCallback(async () => {
     if (!user) {
       setProjectsLed([]);
       setActiveProjectId('');
@@ -47,7 +164,7 @@ export const LeaderDashboard = ({
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
+
     try {
       const res = await api.getProjects();
       const allProjects = res.projects || [];
@@ -70,7 +187,7 @@ export const LeaderDashboard = ({
         if (targetId !== activeProjectId) {
           setActiveProjectId(targetId);
         } else {
-          await fetchDashboardData(targetId);
+          await fetchDashboardData(targetId, true);
         }
       } else {
         setActiveProjectId('');
@@ -82,51 +199,32 @@ export const LeaderDashboard = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, activeProjectId, fetchDashboardData]);
 
   const { subscribe } = useRealtime();
 
-  const fetchDashboardData = async (projId, silent = false) => {
-    if (!projId) {
-      if (!silent) setIsLoading(false);
-      return;
-    }
-    if (!silent && !dashboardData) setIsLoading(true);
-    try {
-      const data = await api.getLeaderDashboard(projId);
-      setDashboardData(data);
-      setActionFeedback(null);
-    } catch (e) {
-      console.warn('Failed to fetch leader dashboard:', e);
-      if (!silent) {
-        setDashboardData(null);
-        setActionFeedback({
-          type: 'error',
-          message: e.message || 'Access Denied: Only the team leader of this project can view this dashboard.',
-        });
-      }
-    } finally {
-      if (!silent) setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchProjects();
-  }, [user]);
+  }, [fetchProjects]);
 
   useEffect(() => {
     if (initialProjectId && String(initialProjectId) !== String(activeProjectId)) {
       setActiveProjectId(String(initialProjectId));
     }
-  }, [initialProjectId]);
+  }, [initialProjectId, activeProjectId]);
 
   useEffect(() => {
     if (activeProjectId) {
+      // Check cache first for instant render
+      const cached = getCachedDashboard(activeProjectId);
+      if (cached) {
+        setDashboardData(cached);
+      }
       fetchDashboardData(activeProjectId);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, fetchDashboardData]);
 
-  // Real-time synchronization for leader
+  // Real-time synchronization
   useEffect(() => {
     if (!activeProjectId) return;
 
@@ -146,18 +244,18 @@ export const LeaderDashboard = ({
       subscribe('project:updated', () => fetchDashboardData(activeProjectId, true)),
     ];
 
-    // Background poll every 15 seconds when tab is visible
+    // Visibility-aware background polling every 20 seconds
     const pollInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         fetchDashboardData(activeProjectId, true);
       }
-    }, 15000);
+    }, 20000);
 
     return () => {
       unsubs.forEach(u => u && u());
       clearInterval(pollInterval);
     };
-  }, [activeProjectId, subscribe]);
+  }, [activeProjectId, subscribe, fetchDashboardData, fetchProjects]);
 
   const handleInvite = async (candidateId, proposedRole, message) => {
     if (!activeProjectId) return;
@@ -169,7 +267,7 @@ export const LeaderDashboard = ({
         message,
       });
       setActionFeedback({ type: 'success', message: 'Invitation sent successfully to candidate!' });
-      await fetchDashboardData(activeProjectId);
+      await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to send invitation.' });
     }
@@ -179,7 +277,7 @@ export const LeaderDashboard = ({
     try {
       await api.cancelInvitation(invId);
       setActionFeedback({ type: 'success', message: 'Invitation cancelled.' });
-      if (activeProjectId) await fetchDashboardData(activeProjectId);
+      if (activeProjectId) await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to cancel invitation.' });
     }
@@ -193,7 +291,7 @@ export const LeaderDashboard = ({
         message: res.message || 'Candidate approved and added to team successfully!',
       });
       if (activeProjectId) {
-        await fetchDashboardData(activeProjectId);
+        await fetchDashboardData(activeProjectId, true);
         await fetchProjects();
       }
     } catch (err) {
@@ -205,7 +303,7 @@ export const LeaderDashboard = ({
     try {
       await api.rejectInvitation(requestId);
       setActionFeedback({ type: 'success', message: 'Join request declined.' });
-      if (activeProjectId) await fetchDashboardData(activeProjectId);
+      if (activeProjectId) await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to decline join request.' });
     }
@@ -215,7 +313,7 @@ export const LeaderDashboard = ({
     try {
       await api.createTask(taskData);
       setActionFeedback({ type: 'success', message: 'Sprint task created successfully.' });
-      if (activeProjectId) await fetchDashboardData(activeProjectId);
+      if (activeProjectId) await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to create task.' });
     }
@@ -224,7 +322,7 @@ export const LeaderDashboard = ({
   const handleTaskStatusChanged = async (taskId, status) => {
     try {
       await api.updateTaskStatus(taskId, status);
-      if (activeProjectId) await fetchDashboardData(activeProjectId);
+      if (activeProjectId) await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to update task status.' });
     }
@@ -234,7 +332,7 @@ export const LeaderDashboard = ({
     try {
       await api.submitLeaderEvaluation(evalData);
       setActionFeedback({ type: 'success', message: 'Leader evaluation submitted successfully.' });
-      if (activeProjectId) await fetchDashboardData(activeProjectId);
+      if (activeProjectId) await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to submit evaluation.' });
     }
@@ -245,12 +343,111 @@ export const LeaderDashboard = ({
     try {
       await api.updateProject(activeProjectId, { recruitmentStatus: newStatus });
       setActionFeedback({ type: 'success', message: `Recruitment status changed to ${newStatus}.` });
-      await fetchDashboardData(activeProjectId);
+      await fetchDashboardData(activeProjectId, true);
     } catch (err) {
       setActionFeedback({ type: 'error', message: err.message || 'Failed to update status.' });
     }
   };
 
+  // Inline Project Creation Handlers
+  const handleAddPresetSkill = (skillName) => {
+    if (newProjectForm.skills.some(s => s.skill.toLowerCase() === skillName.toLowerCase())) return;
+    setNewProjectForm(prev => ({
+      ...prev,
+      skills: [...prev.skills, { skill: skillName, minProficiency: 'Intermediate', isMandatory: true }],
+    }));
+  };
+
+  const handleAddCustomSkill = () => {
+    if (!customSkillName.trim()) return;
+    if (newProjectForm.skills.some(s => s.skill.toLowerCase() === customSkillName.trim().toLowerCase())) return;
+    setNewProjectForm(prev => ({
+      ...prev,
+      skills: [...prev.skills, { skill: customSkillName.trim(), minProficiency: customSkillProf, isMandatory: true }],
+    }));
+    setCustomSkillName('');
+  };
+
+  const handleRemoveSkill = (index) => {
+    setNewProjectForm(prev => ({
+      ...prev,
+      skills: prev.skills.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleToggleRole = (roleName) => {
+    setNewProjectForm(prev => {
+      const exists = prev.roles.includes(roleName);
+      return {
+        ...prev,
+        roles: exists ? prev.roles.filter(r => r !== roleName) : [...prev.roles, roleName],
+      };
+    });
+  };
+
+  const handleAddCustomRole = () => {
+    if (!customRoleName.trim()) return;
+    if (newProjectForm.roles.includes(customRoleName.trim())) return;
+    setNewProjectForm(prev => ({
+      ...prev,
+      roles: [...prev.roles, customRoleName.trim()],
+    }));
+    setCustomRoleName('');
+  };
+
+  const handleInlineProjectSubmit = async (e) => {
+    e.preventDefault();
+    setCreateError('');
+
+    if (!newProjectForm.name.trim() || !newProjectForm.idea.trim() || !newProjectForm.problemStatement.trim() || !newProjectForm.technicalApproach.trim()) {
+      setCreateError('Please complete all required fields (Project Name, Hackathon Idea, Problem Statement, and Technical Approach).');
+      return;
+    }
+    if (newProjectForm.skills.length === 0) {
+      setCreateError('Please select or add at least one required technical skill.');
+      return;
+    }
+    if (newProjectForm.roles.length === 0) {
+      setCreateError('Please specify at least one required team role.');
+      return;
+    }
+
+    setIsSubmittingProject(true);
+    try {
+      const res = await api.createProject({
+        name: newProjectForm.name.trim(),
+        idea: newProjectForm.idea.trim(),
+        description: newProjectForm.description.trim() || newProjectForm.idea.trim(),
+        problemStatement: newProjectForm.problemStatement.trim(),
+        technicalApproach: newProjectForm.technicalApproach.trim(),
+        totalTeamSize: Number(newProjectForm.totalTeamSize) || 4,
+        preferredExperienceLevel: newProjectForm.preferredExperienceLevel,
+        timeline: newProjectForm.timeline,
+        expectedAvailability: newProjectForm.expectedAvailability,
+        requiredSkills: newProjectForm.skills,
+        requiredRoles: newProjectForm.roles,
+      });
+
+      const newProj = res.project || res;
+      const newId = String(newProj.id || newProj._id);
+
+      setActionFeedback({
+        type: 'success',
+        message: `Project "${newProj.name}" launched successfully! Leader dashboard is now active.`,
+      });
+
+      setShowInlineCreate(false);
+      setProjectsLed(prev => [newProj, ...prev]);
+      setActiveProjectId(newId);
+      await fetchDashboardData(newId);
+    } catch (err) {
+      setCreateError(err.message || 'Failed to create project. Please verify all details.');
+    } finally {
+      setIsSubmittingProject(false);
+    }
+  };
+
+  // 1. Not Logged In View
   if (!user) {
     return (
       <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center max-w-xl mx-auto space-y-4 shadow-sm my-6">
@@ -273,7 +470,7 @@ export const LeaderDashboard = ({
     );
   }
 
-  // If we are currently loading projects for the first time
+  // 2. Initial Loading State (only if no cache exists)
   if (isLoading && projectsLed.length === 0 && !dashboardData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[350px] text-gray-500 text-sm gap-3">
@@ -283,39 +480,333 @@ export const LeaderDashboard = ({
     );
   }
 
-  // If projects list has finished loading and user leads 0 projects
-  if (!isLoading && projectsLed.length === 0) {
+  // 3. Inline Project Creation Card (When user has 0 projects led OR clicked "+ New Project")
+  if ((!isLoading && projectsLed.length === 0) || showInlineCreate) {
     return (
-      <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center max-w-xl mx-auto space-y-4 shadow-sm my-6">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto shadow-xs">
-          <Shield className="w-7 h-7" />
-        </div>
-        <h3 className="text-xl font-bold text-gray-900">Team Leader Access Only</h3>
-        <p className="text-xs text-gray-500 leading-relaxed">
-          You are not currently the Team Leader of any hackathon project. The Leader Dashboard is exclusively accessible to team leaders who have posted a project.
-        </p>
-        <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
-          {onNavigateToStudent && (
+      <div className="max-w-4xl mx-auto space-y-6 my-4">
+        {actionFeedback && (
+          <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-medium shadow-xs transition-all ${
+            actionFeedback.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{actionFeedback.message}</span>
+            </div>
             <button
-              onClick={onNavigateToStudent}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold border border-gray-300 transition-colors cursor-pointer"
+              onClick={() => setActionFeedback(null)}
+              className="text-gray-400 hover:text-gray-700 px-2 py-0.5 rounded cursor-pointer"
             >
-              Back to Student Dashboard
+              ✕
             </button>
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
+          <div className="flex items-start justify-between flex-wrap gap-4 border-b border-gray-200 pb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                <Rocket className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wider">
+                  Leader Onboarding
+                </span>
+                <h2 className="text-xl font-bold text-gray-900 mt-1">
+                  Launch Your Hackathon Project as Team Leader
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Set up your project idea, required skills, and team capacity. Your Team Leader Dashboard activates immediately on creation.
+                </p>
+              </div>
+            </div>
+
+            {projectsLed.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowInlineCreate(false)}
+                className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer border border-gray-300"
+              >
+                Back to Dashboard
+              </button>
+            )}
+          </div>
+
+          {createError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{createError}</span>
+            </div>
           )}
-          <button
-            onClick={onOpenCreateProject}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-colors"
-          >
-            <Target className="w-4 h-4" />
-            <span>Create Project as Team Leader</span>
-          </button>
+
+          <form onSubmit={handleInlineProjectSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="block font-semibold text-gray-800">
+                  Project Title <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. AI-Powered Smart Campus Energy Optimizer"
+                  value={newProjectForm.name}
+                  onChange={e => setNewProjectForm({ ...newProjectForm, name: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="block font-semibold text-gray-800">
+                  Hackathon Idea / Short Pitch <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="One-line elevator pitch explaining the core software concept..."
+                  value={newProjectForm.idea}
+                  onChange={e => setNewProjectForm({ ...newProjectForm, idea: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-semibold text-gray-800">
+                  Problem Statement <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="What technical problem does this hackathon project address?"
+                  value={newProjectForm.problemStatement}
+                  onChange={e => setNewProjectForm({ ...newProjectForm, problemStatement: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-semibold text-gray-800">
+                  Technical Approach <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Architecture, libraries, APIs, and methodology to build this solution..."
+                  value={newProjectForm.technicalApproach}
+                  onChange={e => setNewProjectForm({ ...newProjectForm, technicalApproach: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-semibold text-gray-800">Total Team Size (including Leader)</label>
+                <select
+                  value={newProjectForm.totalTeamSize}
+                  onChange={e => setNewProjectForm({ ...newProjectForm, totalTeamSize: Number(e.target.value) })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs font-medium focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600"
+                >
+                  <option value={2}>2 Members (Pair Programming)</option>
+                  <option value={3}>3 Members (Compact Squad)</option>
+                  <option value={4}>4 Members (Standard Hackathon Team)</option>
+                  <option value={5}>5 Members (Extended Team)</option>
+                  <option value={6}>6 Members (Large Sprint Team)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-semibold text-gray-800">Preferred Experience Level</label>
+                <select
+                  value={newProjectForm.preferredExperienceLevel}
+                  onChange={e => setNewProjectForm({ ...newProjectForm, preferredExperienceLevel: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-gray-900 text-xs font-medium focus:ring-2 focus:ring-indigo-100 focus:border-indigo-600"
+                >
+                  <option value="Beginner">Beginner Friendly (1st & 2nd Year)</option>
+                  <option value="Intermediate">Intermediate (Hands-on experience)</option>
+                  <option value="Advanced">Advanced (Production-ready Hackathon)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Skills Selection */}
+            <div className="space-y-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold text-gray-900 text-xs">Required Technical Skills</h4>
+                  <p className="text-[11px] text-gray-500">
+                    Smart matching uses these to calculate candidate compatibility (Formula: 0.50S + 0.25E + 0.25A).
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Add Presets */}
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[11px] text-gray-500 font-medium mr-1">Quick add:</span>
+                {POPULAR_SKILL_PRESETS.map(sk => {
+                  const isAdded = newProjectForm.skills.some(s => s.skill.toLowerCase() === sk.toLowerCase());
+                  return (
+                    <button
+                      key={sk}
+                      type="button"
+                      disabled={isAdded}
+                      onClick={() => handleAddPresetSkill(sk)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer ${
+                        isAdded
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border-gray-300 hover:border-indigo-300'
+                      }`}
+                    >
+                      + {sk}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Selected Skills List */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {newProjectForm.skills.map((s, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs rounded-lg font-medium"
+                  >
+                    <span>{s.skill}</span>
+                    <span className="text-[10px] text-indigo-500 font-mono">({s.minProficiency})</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSkill(idx)}
+                      className="text-indigo-400 hover:text-indigo-700 ml-0.5 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              {/* Custom Skill Input */}
+              <div className="flex items-center gap-2 max-w-md pt-1">
+                <input
+                  type="text"
+                  placeholder="Add custom skill (e.g. GraphQL, Solidity)"
+                  value={customSkillName}
+                  onChange={e => setCustomSkillName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomSkill();
+                    }
+                  }}
+                  className="flex-1 p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-900"
+                />
+                <select
+                  value={customSkillProf}
+                  onChange={e => setCustomSkillProf(e.target.value)}
+                  className="p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800"
+                >
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAddCustomSkill}
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-semibold border border-gray-300 cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Roles Selection */}
+            <div className="space-y-3 pt-3 border-t border-gray-200">
+              <div>
+                <h4 className="font-semibold text-gray-900 text-xs">Required Team Roles</h4>
+                <p className="text-[11px] text-gray-500">
+                  Select the roles you need filled to evaluate team-balance coverage.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {POPULAR_ROLE_PRESETS.map(role => {
+                  const isSelected = newProjectForm.roles.includes(role);
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => handleToggleRole(role)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                      }`}
+                    >
+                      {isSelected ? '✓ ' : '+ '} {role}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Role Input */}
+              <div className="flex items-center gap-2 max-w-sm pt-1">
+                <input
+                  type="text"
+                  placeholder="Custom role name"
+                  value={customRoleName}
+                  onChange={e => setCustomRoleName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomRole();
+                    }
+                  }}
+                  className="flex-1 p-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-900"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomRole}
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-semibold border border-gray-300 cursor-pointer"
+                >
+                  Add Role
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-4 border-t border-gray-200 flex items-center justify-between flex-wrap gap-3">
+              {onNavigateToStudent && (
+                <button
+                  type="button"
+                  onClick={onNavigateToStudent}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold border border-gray-300 transition-colors cursor-pointer"
+                >
+                  Return to Student Dashboard
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmittingProject}
+                className="ml-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                {isSubmittingProject ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Launching Project...</span>
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="w-4 h-4" />
+                    <span>Launch Hackathon Project & Open Leader Dashboard</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );
   }
 
-  if (isLoading || !dashboardData) {
+  // 4. Loading fallback if no data could be loaded
+  if (!dashboardData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500 text-sm gap-3">
         {actionFeedback && actionFeedback.type === 'error' ? (
@@ -342,18 +833,28 @@ export const LeaderDashboard = ({
 
   const {
     project,
-    teamMembers,
-    currentTeamSize,
-    requiredTeamSize,
-    isTeamFull,
-    candidateRecommendations,
-    teamBalance,
-    activeInvitations,
+    teamMembers = [],
+    currentTeamSize = 1,
+    requiredTeamSize = 4,
+    isTeamFull = false,
+    candidateRecommendations = [],
+    teamBalance = {
+      roleCoveragePercentage: 0,
+      skillCoveragePercentage: 0,
+      coveredRoles: [],
+      missingRoles: [],
+      coveredSkills: [],
+      missingSkills: [],
+      recommendedCandidatesForMissingRoles: [],
+    },
+    activeInvitations = [],
     pendingJoinRequests = [],
-    tasks,
-    taskCompletionPercentage,
-    memberProgress,
+    tasks = [],
+    taskCompletionPercentage = 0,
+    memberProgress = [],
   } = dashboardData;
+
+  const currentProjectLed = projectsLed.find(p => String(p.id || p._id) === String(activeProjectId));
 
   return (
     <div className="space-y-6">
@@ -380,15 +881,15 @@ export const LeaderDashboard = ({
         </div>
       )}
 
-      {/* Project Selector & Header */}
+      {/* Project Selector & Header Bar */}
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
               <Shield className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wider">
                   Leader Portal
                 </span>
@@ -399,39 +900,75 @@ export const LeaderDashboard = ({
                 }`}>
                   Status: {project.recruitmentStatus}
                 </span>
+
+                {/* Live Background Sync Indicator */}
+                {isSyncing ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Syncing...</span>
+                  </span>
+                ) : lastSyncTime ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full font-mono">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Live</span>
+                  </span>
+                ) : null}
               </div>
               <h2 className="text-xl font-bold text-gray-900 mt-1">{project.name}</h2>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Compact Project Selector Dropdown with Capacity Badges */}
             {projectsLed.length > 1 && (
-              <select
-                value={activeProjectId}
-                onChange={e => setActiveProjectId(e.target.value)}
-                className="text-xs p-2 border border-gray-300 rounded-lg bg-white text-gray-800 font-medium focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-              >
-                {projectsLed.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={activeProjectId}
+                  onChange={e => setActiveProjectId(e.target.value)}
+                  className="text-xs py-2 px-3 pr-8 border border-gray-300 rounded-xl bg-white text-gray-800 font-semibold focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-2xs cursor-pointer appearance-none"
+                >
+                  {projectsLed.map(p => {
+                    const id = String(p.id || p._id);
+                    const count = (p.members || p.teamMembers || []).length || 1;
+                    const max = p.totalTeamSize || p.requiredTeamSize || 4;
+                    const status = p.recruitmentStatus || 'Open';
+                    return (
+                      <option key={id} value={id}>
+                        {p.name} — [{count}/{max} Members • {status}]
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
             )}
 
+            {/* Quick Button to Launch Another Project */}
+            <button
+              type="button"
+              onClick={() => setShowInlineCreate(true)}
+              className="px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5 text-indigo-600" />
+              <span>New Project</span>
+            </button>
+
+            {/* Recruitment Status Control */}
             <select
               value={project.recruitmentStatus}
               onChange={e => handleStatusChange(e.target.value)}
-              className="text-xs p-2 border border-gray-300 rounded-lg bg-white text-gray-800 font-semibold focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className="text-xs p-2 border border-gray-300 rounded-xl bg-white text-gray-800 font-semibold focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-2xs cursor-pointer"
             >
-              <option value="Open">Recruitment Open</option>
-              <option value="Closed">Recruitment Closed</option>
-              <option value="Completed">Project Completed</option>
+              <option value="Open">Recruitment: Open</option>
+              <option value="Closed">Recruitment: Closed</option>
+              <option value="Completed">Project: Completed</option>
             </select>
 
             {project.recruitmentStatus === 'Completed' ? (
               <button
                 type="button"
                 onClick={() => handleStatusChange('Open')}
-                className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-xl text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
               >
                 Reopen Project
               </button>
@@ -439,25 +976,25 @@ export const LeaderDashboard = ({
               <button
                 type="button"
                 onClick={() => handleStatusChange('Completed')}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Mark Project Completed</span>
+                <span>Mark Completed</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Project Key Metrics Banner */}
+        {/* Project Key Metrics KPI Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-200 text-xs">
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
             <span className="text-[10px] text-gray-500 uppercase font-semibold">Team Capacity</span>
-            <div className="font-bold text-gray-900 text-base mt-0.5">
+            <div className="font-bold text-gray-900 text-base mt-0.5 font-mono">
               {currentTeamSize} / {requiredTeamSize} Students
             </div>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
-                className="bg-indigo-600 h-full rounded-full"
+                className="bg-indigo-600 h-full rounded-full transition-all duration-300"
                 style={{ width: `${Math.min(100, (currentTeamSize / requiredTeamSize) * 100)}%` }}
               />
             </div>
@@ -465,12 +1002,12 @@ export const LeaderDashboard = ({
 
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
             <span className="text-[10px] text-gray-500 uppercase font-semibold">Role Coverage</span>
-            <div className="font-bold text-gray-900 text-base mt-0.5">
+            <div className="font-bold text-gray-900 text-base mt-0.5 font-mono">
               {teamBalance.roleCoveragePercentage}%
             </div>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
-                className="bg-emerald-600 h-full rounded-full"
+                className="bg-emerald-600 h-full rounded-full transition-all duration-300"
                 style={{ width: `${teamBalance.roleCoveragePercentage}%` }}
               />
             </div>
@@ -478,12 +1015,12 @@ export const LeaderDashboard = ({
 
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
             <span className="text-[10px] text-gray-500 uppercase font-semibold">Skill Coverage</span>
-            <div className="font-bold text-gray-900 text-base mt-0.5">
+            <div className="font-bold text-gray-900 text-base mt-0.5 font-mono">
               {teamBalance.skillCoveragePercentage}%
             </div>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
-                className="bg-blue-600 h-full rounded-full"
+                className="bg-blue-600 h-full rounded-full transition-all duration-300"
                 style={{ width: `${teamBalance.skillCoveragePercentage}%` }}
               />
             </div>
@@ -491,12 +1028,12 @@ export const LeaderDashboard = ({
 
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
             <span className="text-[10px] text-gray-500 uppercase font-semibold">Tasks Completed</span>
-            <div className="font-bold text-gray-900 text-base mt-0.5">
+            <div className="font-bold text-gray-900 text-base mt-0.5 font-mono">
               {taskCompletionPercentage}%
             </div>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
-                className="bg-purple-600 h-full rounded-full"
+                className="bg-purple-600 h-full rounded-full transition-all duration-300"
                 style={{ width: `${taskCompletionPercentage}%` }}
               />
             </div>
@@ -543,20 +1080,42 @@ export const LeaderDashboard = ({
                   )}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200">
                   <button
-                    onClick={() => handleRejectJoinRequest(req.id || req._id)}
-                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 text-xs font-medium cursor-pointer transition-colors"
+                    onClick={async () => {
+                      try {
+                        const prof = await api.getProfile(req.candidateId);
+                        setSelectedCandidate(prof.profile);
+                      } catch {
+                        setSelectedCandidate({
+                          id: req.candidateId,
+                          fullName: req.candidateName,
+                          email: req.candidateEmail,
+                          department: req.candidateDepartment,
+                          academicYear: req.candidateAcademicYear,
+                        });
+                      }
+                    }}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium cursor-pointer underline underline-offset-2"
                   >
-                    Decline
+                    View Profile & ID Card
                   </button>
-                  <button
-                    onClick={() => handleApproveJoinRequest(req.id || req._id)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Approve & Add to Team</span>
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleRejectJoinRequest(req.id || req._id)}
+                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 text-xs font-medium cursor-pointer transition-colors"
+                    >
+                      Decline
+                    </button>
+                    <button
+                      onClick={() => handleApproveJoinRequest(req.id || req._id)}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Approve</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -651,14 +1210,14 @@ export const LeaderDashboard = ({
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-gray-800 text-sm">Role Coverage</span>
-                  <span className="text-sm font-bold text-indigo-600">
+                  <span className="text-sm font-bold text-indigo-600 font-mono">
                     {teamBalance.roleCoveragePercentage}%
                   </span>
                 </div>
 
                 <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-indigo-600 h-full rounded-full"
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-300"
                     style={{ width: `${teamBalance.roleCoveragePercentage}%` }}
                   />
                 </div>
@@ -704,14 +1263,14 @@ export const LeaderDashboard = ({
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-gray-800 text-sm">Skill Coverage</span>
-                  <span className="text-sm font-bold text-blue-600">
+                  <span className="text-sm font-bold text-blue-600 font-mono">
                     {teamBalance.skillCoveragePercentage}%
                   </span>
                 </div>
 
                 <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-blue-600 h-full rounded-full"
+                    className="bg-blue-600 h-full rounded-full transition-all duration-300"
                     style={{ width: `${teamBalance.skillCoveragePercentage}%` }}
                   />
                 </div>
@@ -761,7 +1320,7 @@ export const LeaderDashboard = ({
             </div>
 
             {/* Recommended Candidates for Missing Roles */}
-            {teamBalance.recommendedCandidatesForMissingRoles.length > 0 && (
+            {teamBalance.recommendedCandidatesForMissingRoles && teamBalance.recommendedCandidatesForMissingRoles.length > 0 && (
               <div className="space-y-3 pt-3 border-t border-gray-200">
                 <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -912,7 +1471,111 @@ export const LeaderDashboard = ({
         </div>
       )}
 
-      {/* TAB 3: TASKS & DEADLINES */}
+      {/* TAB 3: JOIN REQUESTS */}
+      {activeTab === 'join-requests' && (
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                <span>Candidate Join Requests</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Review and respond to students who submitted join requests for <strong className="text-gray-800">{project.name}</strong>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => fetchDashboardData(activeProjectId)}
+              className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors border border-gray-300"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Refresh Requests</span>
+            </button>
+          </div>
+
+          {/* Pending Requests List */}
+          {pendingJoinRequests.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-500 text-xs space-y-2">
+              <Users className="w-8 h-8 mx-auto text-gray-400 opacity-60" />
+              <p className="font-medium text-gray-700">No pending join requests for this project at this time.</p>
+              <p className="text-[11px] text-gray-400">
+                When students request to join your hackathon project, their requests and proposed roles will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {pendingJoinRequests.map(req => (
+                <div
+                  key={req.id}
+                  className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-base">{req.candidateName}</h4>
+                        <p className="text-xs text-gray-500">
+                          {req.candidateAcademicYear || 'WCE'} • {req.candidateDepartment || 'Engineering'}
+                        </p>
+                        <p className="text-[11px] text-gray-400 font-mono mt-0.5">{req.candidateEmail}</p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold shrink-0">
+                        Role: {req.proposedRole}
+                      </span>
+                    </div>
+
+                    {req.message && (
+                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs text-gray-700 italic">
+                        "{req.message}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-200 flex-wrap">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const prof = await api.getProfile(req.candidateId);
+                          setSelectedCandidate(prof.profile);
+                        } catch {
+                          setSelectedCandidate({
+                            id: req.candidateId,
+                            fullName: req.candidateName,
+                            email: req.candidateEmail,
+                            department: req.candidateDepartment,
+                            academicYear: req.candidateAcademicYear,
+                          });
+                        }
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium cursor-pointer underline underline-offset-2"
+                    >
+                      View Student Profile & ID Card
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRejectJoinRequest(req.id || req._id)}
+                        className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 text-xs font-medium cursor-pointer transition-colors"
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleApproveJoinRequest(req.id || req._id)}
+                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Approve & Add to Team</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: TASKS & DEADLINES */}
       {activeTab === 'tasks' && (
         <div className="space-y-4">
           {/* Assigned Tasks Summary for Leader */}
@@ -922,7 +1585,7 @@ export const LeaderDashboard = ({
                 <Clock className="w-4 h-4 text-indigo-600" />
                 <span>Sprint Tasks Assignment Summary ({tasks.length})</span>
               </h4>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 font-mono">
                 {tasks.filter(t => t.status === 'Completed').length} / {tasks.length} Completed
               </span>
             </div>
@@ -955,7 +1618,7 @@ export const LeaderDashboard = ({
                             {t.priority}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-gray-600">
+                        <td className="py-2 px-3 text-gray-600 font-mono">
                           {t.deadline ? new Date(t.deadline).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="py-2 px-3">
@@ -990,7 +1653,7 @@ export const LeaderDashboard = ({
         </div>
       )}
 
-      {/* TAB 4: MEMBER EVALUATIONS & RELIABILITY */}
+      {/* TAB 5: MEMBER EVALUATIONS & RELIABILITY */}
       {activeTab === 'evaluations' && (
         <div className="space-y-6">
           <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-2">
@@ -1040,110 +1703,6 @@ export const LeaderDashboard = ({
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* TAB: JOIN REQUESTS */}
-      {activeTab === 'join-requests' && (
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-600" />
-                <span>Candidate Join Requests</span>
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Review and respond to students who submitted join requests for <strong className="text-gray-800">{project.name}</strong>.
-              </p>
-            </div>
-
-            <button
-              onClick={() => fetchDashboardData(activeProjectId)}
-              className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors border border-gray-300"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Refresh Requests</span>
-            </button>
-          </div>
-
-          {/* Pending Requests */}
-          {pendingJoinRequests.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-gray-500 text-xs space-y-2">
-              <Users className="w-8 h-8 mx-auto text-gray-400 opacity-60" />
-              <p className="font-medium text-gray-700">No pending join requests for this project at this time.</p>
-              <p className="text-[11px] text-gray-400">
-                When students request to join your hackathon project, their requests and proposed roles will appear here.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {pendingJoinRequests.map(req => (
-                <div
-                  key={req.id}
-                  className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4 flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-base">{req.candidateName}</h4>
-                        <p className="text-xs text-gray-500">
-                          {req.candidateAcademicYear || 'WCE'} • {req.candidateDepartment || 'Engineering'}
-                        </p>
-                        <p className="text-[11px] text-gray-400 font-mono mt-0.5">{req.candidateEmail}</p>
-                      </div>
-                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold shrink-0">
-                        Role: {req.proposedRole}
-                      </span>
-                    </div>
-
-                    {req.message && (
-                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs text-gray-700 italic">
-                        "{req.message}"
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-200 flex-wrap">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const prof = await api.getProfile(req.candidateId);
-                          setSelectedCandidate(prof.profile);
-                        } catch (e) {
-                          setSelectedCandidate({
-                            id: req.candidateId,
-                            fullName: req.candidateName,
-                            email: req.candidateEmail,
-                            department: req.candidateDepartment,
-                            academicYear: req.candidateAcademicYear,
-                          });
-                        }
-                      }}
-                      className="text-xs text-indigo-600 hover:text-indigo-700 font-medium cursor-pointer underline underline-offset-2"
-                    >
-                      View Student Profile & ID Card
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleRejectJoinRequest(req.id || req._id)}
-                        className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 text-xs font-medium cursor-pointer transition-colors"
-                      >
-                        Decline
-                      </button>
-                      <button
-                        onClick={() => handleApproveJoinRequest(req.id || req._id)}
-                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Approve & Add to Team</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
