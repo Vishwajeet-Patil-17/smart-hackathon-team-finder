@@ -188,7 +188,9 @@ router.get('/leader/:projectId', authenticate, async (req, res) => {
     const projId = String(project.id || project._id || projectId);
     const userId = req.user?.id ? String(req.user.id) : (req.user?._id ? String(req.user._id) : '');
     const userEmail = (req.user?.email || '').toLowerCase().trim();
-    const leaderIdStr = project.leaderId ? String(project.leaderId._id || project.leaderId.id || project.leaderId) : '';
+    const leaderIdStr = project.leaderId
+      ? String(typeof project.leaderId === 'object' ? (project.leaderId._id ?? project.leaderId.id ?? project.leaderId) : project.leaderId)
+      : '';
     const leaderEmailStr = (project.leaderEmail || '').toLowerCase().trim();
 
     const isLeader =

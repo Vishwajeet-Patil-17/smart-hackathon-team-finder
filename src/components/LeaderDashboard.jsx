@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useRealtime } from '../context/RealtimeContext.jsx';
 import { api } from '../services/api.js';
@@ -118,18 +118,32 @@ export const LeaderDashboard = ({
   const [customSkillProf, setCustomSkillProf] = useState('Intermediate');
   const [customRoleName, setCustomRoleName] = useState('');
 
+  // Stabilize state via refs to prevent re-render cascading and infinite loops
+  const dashboardDataRef = useRef(dashboardData);
+  useEffect(() => {
+    dashboardDataRef.current = dashboardData;
+  }, [dashboardData]);
+
+  const activeProjectIdRef = useRef(activeProjectId);
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
   const fetchDashboardData = useCallback(async (projId, silent = false) => {
     if (!projId) {
-      if (!silent) setIsLoading(false);
+      setIsLoading(false);
+      setIsSyncing(false);
       return;
     }
 
     const cached = getCachedDashboard(projId);
-    if (cached && !dashboardData) {
+    const hasCurrentData = Boolean(dashboardDataRef.current);
+
+    if (cached && !hasCurrentData) {
       setDashboardData(cached);
       setIsLoading(false);
       setIsSyncing(true);
-    } else if (!silent && !dashboardData) {
+    } else if (!hasCurrentData && !silent) {
       setIsLoading(true);
     } else {
       setIsSyncing(true);
@@ -143,18 +157,26 @@ export const LeaderDashboard = ({
       setActionFeedback(null);
     } catch (e) {
       console.warn('Failed to fetch leader dashboard:', e);
-      if (!silent) {
-        if (!cached) setDashboardData(null);
+      // Surface errors on initial fetch (when no data exists) or when explicitly not silent
+      if (!silent || !dashboardDataRef.current) {
+        if (!cached) {
+          setDashboardData(null);
+        }
         setActionFeedback({
           type: 'error',
           message: e.message || 'Access Denied: Only the team leader of this project can view this dashboard.',
         });
       }
     } finally {
-      if (!silent) setIsLoading(false);
+      setIsLoading(false);
       setIsSyncing(false);
     }
-  }, [dashboardData]);
+  }, []); // Completely stable! No dashboardData dep.
+
+  const fetchDashboardDataRef = useRef(fetchDashboardData);
+  useEffect(() => {
+    fetchDashboardDataRef.current = fetchDashboardData;
+  }, [fetchDashboardData]);
 
   const fetchProjects = useCallback(async () => {
     if (!user) {
@@ -172,7 +194,7 @@ export const LeaderDashboard = ({
       const userId = user?.id ? String(user.id) : (user?._id ? String(user._id) : '');
 
       const led = allProjects.filter(p => {
-        const pLeaderId = p.leaderId ? String(p.leaderId._id || p.leaderId.id || p.leaderId) : '';
+        const pLeaderId = p.leaderId ? String(typeof p.leaderId === 'object' ? (p.leaderId._id ?? p.leaderId.id ?? p.leaderId) : p.leaderId) : '';
         const pLeaderEmail = (p.leaderEmail || '').toLowerCase().trim();
         return (Boolean(userId) && Boolean(pLeaderId) && pLeaderId === userId) ||
                (Boolean(userEmail) && Boolean(pLeaderEmail) && pLeaderEmail === userEmail);
@@ -180,14 +202,18 @@ export const LeaderDashboard = ({
 
       setProjectsLed(led);
       if (led.length > 0) {
-        const targetId = (activeProjectId && led.some(p => String(p.id || p._id) === String(activeProjectId)))
-          ? activeProjectId
+        const currentActive = activeProjectIdRef.current;
+        const targetId = (currentActive && led.some(p => String(p.id || p._id) === String(currentActive)))
+          ? currentActive
           : String(led[0].id || led[0]._id);
 
-        if (targetId !== activeProjectId) {
+        if (targetId !== currentActive) {
           setActiveProjectId(targetId);
         } else {
-          await fetchDashboardData(targetId, true);
+          // Trigger fetch via ref
+          if (fetchDashboardDataRef.current) {
+            await fetchDashboardDataRef.current(targetId);
+          }
         }
       } else {
         setActiveProjectId('');
@@ -199,7 +225,12 @@ export const LeaderDashboard = ({
     } finally {
       setIsLoading(false);
     }
-  }, [user, activeProjectId, fetchDashboardData]);
+  }, [user]); // Depends strictly on user
+
+  const fetchProjectsRef = useRef(fetchProjects);
+  useEffect(() => {
+    fetchProjectsRef.current = fetchProjects;
+  }, [fetchProjects]);
 
   const { subscribe } = useRealtime();
 
@@ -208,10 +239,10 @@ export const LeaderDashboard = ({
   }, [fetchProjects]);
 
   useEffect(() => {
-    if (initialProjectId && String(initialProjectId) !== String(activeProjectId)) {
+    if (initialProjectId && String(initialProjectId) !== String(activeProjectIdRef.current)) {
       setActiveProjectId(String(initialProjectId));
     }
-  }, [initialProjectId, activeProjectId]);
+  }, [initialProjectId]);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -229,25 +260,25 @@ export const LeaderDashboard = ({
     if (!activeProjectId) return;
 
     const unsubs = [
-      subscribe('task:created', () => fetchDashboardData(activeProjectId, true)),
-      subscribe('task:updated', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('task:created', () => fetchDashboardDataRef.current?.(activeProjectId, true)),
+      subscribe('task:updated', () => fetchDashboardDataRef.current?.(activeProjectId, true)),
       subscribe('invitation:accepted', () => {
-        fetchDashboardData(activeProjectId, true);
-        fetchProjects();
+        fetchDashboardDataRef.current?.(activeProjectId, true);
+        fetchProjectsRef.current?.();
       }),
-      subscribe('invitation:rejected', () => fetchDashboardData(activeProjectId, true)),
-      subscribe('join_request:sent', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('invitation:rejected', () => fetchDashboardDataRef.current?.(activeProjectId, true)),
+      subscribe('join_request:sent', () => fetchDashboardDataRef.current?.(activeProjectId, true)),
       subscribe('join_request:approved', () => {
-        fetchDashboardData(activeProjectId, true);
-        fetchProjects();
+        fetchDashboardDataRef.current?.(activeProjectId, true);
+        fetchProjectsRef.current?.();
       }),
-      subscribe('project:updated', () => fetchDashboardData(activeProjectId, true)),
+      subscribe('project:updated', () => fetchDashboardDataRef.current?.(activeProjectId, true)),
     ];
 
     // Visibility-aware background polling every 20 seconds
     const pollInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        fetchDashboardData(activeProjectId, true);
+        fetchDashboardDataRef.current?.(activeProjectId, true);
       }
     }, 20000);
 
@@ -255,7 +286,7 @@ export const LeaderDashboard = ({
       unsubs.forEach(u => u && u());
       clearInterval(pollInterval);
     };
-  }, [activeProjectId, subscribe, fetchDashboardData, fetchProjects]);
+  }, [activeProjectId, subscribe]);
 
   const handleInvite = async (candidateId, proposedRole, message) => {
     if (!activeProjectId) return;
